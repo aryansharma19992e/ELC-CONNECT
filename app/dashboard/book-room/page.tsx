@@ -1,0 +1,339 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CalendarIcon, Clock, Users, MapPin, ArrowLeft, Search } from "lucide-react"
+import Link from "next/link"
+import { format } from "date-fns"
+
+export default function BookRoomPage() {
+  const [selectedDate, setSelectedDate] = useState<Date>()
+  const [selectedRoom, setSelectedRoom] = useState("")
+  const [timeSlot, setTimeSlot] = useState("")
+  const [duration, setDuration] = useState("")
+  const [attendees, setAttendees] = useState("")
+  const [purpose, setPurpose] = useState("")
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterCapacity, setFilterCapacity] = useState("")
+
+  const [availableRooms] = useState([
+    {
+      id: "A-201",
+      name: "Room A-201",
+      capacity: 8,
+      floor: "2nd Floor",
+      type: "Study Room",
+      equipment: ["Projector", "Whiteboard", "WiFi", "Air Conditioning"],
+      available: true,
+      timeSlots: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"],
+    },
+    {
+      id: "B-105",
+      name: "Lab B-105",
+      capacity: 20,
+      floor: "1st Floor",
+      type: "Computer Lab",
+      equipment: ["Computers", "Projector", "WiFi", "3D Printer"],
+      available: true,
+      timeSlots: ["10:00 AM", "1:00 PM", "3:00 PM"],
+    },
+    {
+      id: "C-305",
+      name: "Room C-305",
+      capacity: 6,
+      floor: "3rd Floor",
+      type: "Meeting Room",
+      equipment: ["Whiteboard", "WiFi", "Video Conferencing"],
+      available: false,
+      timeSlots: [],
+    },
+    {
+      id: "A-101",
+      name: "Lecture Hall A-101",
+      capacity: 50,
+      floor: "1st Floor",
+      type: "Lecture Hall",
+      equipment: ["Projector", "Microphone", "WiFi", "Recording Equipment"],
+      available: true,
+      timeSlots: ["9:00 AM", "2:00 PM"],
+    },
+  ])
+
+  const equipmentOptions = [
+    "Projector",
+    "Whiteboard",
+    "Computers",
+    "WiFi",
+    "Air Conditioning",
+    "Video Conferencing",
+    "3D Printer",
+    "Microphone",
+    "Recording Equipment",
+  ]
+
+  const handleEquipmentChange = (equipment: string, checked: boolean) => {
+    if (checked) {
+      setSelectedEquipment([...selectedEquipment, equipment])
+    } else {
+      setSelectedEquipment(selectedEquipment.filter((item) => item !== equipment))
+    }
+  }
+
+  const filteredRooms = availableRooms.filter((room) => {
+    const matchesSearch =
+      room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      room.type.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesCapacity = !filterCapacity || room.capacity >= Number.parseInt(filterCapacity)
+    const matchesEquipment =
+      selectedEquipment.length === 0 || selectedEquipment.every((eq) => room.equipment.includes(eq))
+
+    return matchesSearch && matchesCapacity && matchesEquipment
+  })
+
+  const handleBookRoom = () => {
+    // Handle room booking logic
+    alert(`Room ${selectedRoom} booked successfully!`)
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900">Book a Room</h1>
+                <p className="text-sm text-gray-500">Reserve your space in the ELC</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Booking Form */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle>Booking Details</CardTitle>
+                <CardDescription>Fill in your reservation information</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDate ? format(selectedDate, "PPP") : "Select date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="timeSlot">Time Slot</Label>
+                  <Select value={timeSlot} onValueChange={setTimeSlot}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="9:00 AM - 11:00 AM">9:00 AM - 11:00 AM</SelectItem>
+                      <SelectItem value="11:00 AM - 1:00 PM">11:00 AM - 1:00 PM</SelectItem>
+                      <SelectItem value="1:00 PM - 3:00 PM">1:00 PM - 3:00 PM</SelectItem>
+                      <SelectItem value="3:00 PM - 5:00 PM">3:00 PM - 5:00 PM</SelectItem>
+                      <SelectItem value="5:00 PM - 7:00 PM">5:00 PM - 7:00 PM</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="attendees">Number of Attendees</Label>
+                  <Input
+                    id="attendees"
+                    type="number"
+                    placeholder="How many people?"
+                    value={attendees}
+                    onChange={(e) => setAttendees(e.target.value)}
+                    min="1"
+                    max="50"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="purpose">Purpose</Label>
+                  <Textarea
+                    id="purpose"
+                    placeholder="Brief description of your activity"
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Required Equipment</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {equipmentOptions.map((equipment) => (
+                      <div key={equipment} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={equipment}
+                          checked={selectedEquipment.includes(equipment)}
+                          onCheckedChange={(checked) => handleEquipmentChange(equipment, checked as boolean)}
+                        />
+                        <Label htmlFor={equipment} className="text-sm">
+                          {equipment}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleBookRoom}
+                  disabled={!selectedRoom || !selectedDate || !timeSlot}
+                >
+                  Book Selected Room
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Room Selection */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                  <div>
+                    <CardTitle>Available Rooms</CardTitle>
+                    <CardDescription>Choose from available spaces</CardDescription>
+                  </div>
+                  <div className="flex space-x-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        placeholder="Search rooms..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10 w-48"
+                      />
+                    </div>
+                    <Select value={filterCapacity} onValueChange={setFilterCapacity}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="Capacity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Any</SelectItem>
+                        <SelectItem value="5">5+ people</SelectItem>
+                        <SelectItem value="10">10+ people</SelectItem>
+                        <SelectItem value="20">20+ people</SelectItem>
+                        <SelectItem value="50">50+ people</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  {filteredRooms.map((room) => (
+                    <div
+                      key={room.id}
+                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                        selectedRoom === room.id
+                          ? "border-blue-500 bg-blue-50"
+                          : room.available
+                            ? "border-gray-200 hover:border-gray-300"
+                            : "border-gray-200 bg-gray-50 opacity-60"
+                      }`}
+                      onClick={() => room.available && setSelectedRoom(room.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="font-semibold text-gray-900">{room.name}</h3>
+                            <Badge variant={room.available ? "default" : "secondary"}>
+                              {room.available ? "Available" : "Occupied"}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
+                            <span className="flex items-center">
+                              <Users className="w-4 h-4 mr-1" />
+                              {room.capacity} people
+                            </span>
+                            <span className="flex items-center">
+                              <MapPin className="w-4 h-4 mr-1" />
+                              {room.floor}
+                            </span>
+                            <Badge variant="outline">{room.type}</Badge>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {room.equipment.map((eq, index) => (
+                              <Badge key={index} variant="secondary" className="text-xs">
+                                {eq}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {room.available && room.timeSlots.length > 0 && (
+                            <div>
+                              <p className="text-sm font-medium text-gray-700 mb-1">Available Times:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {room.timeSlots.map((time, index) => (
+                                  <Badge key={index} variant="outline" className="text-xs">
+                                    <Clock className="w-3 h-3 mr-1" />
+                                    {time}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {room.available && (
+                          <Button
+                            variant={selectedRoom === room.id ? "default" : "outline"}
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedRoom(room.id)
+                            }}
+                          >
+                            {selectedRoom === room.id ? "Selected" : "Select"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
