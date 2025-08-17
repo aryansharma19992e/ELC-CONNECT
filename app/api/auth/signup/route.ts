@@ -1,46 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import dbConnect from '@/lib/mongodb'
-import User from '@/lib/models/User'
-import { hashPassword } from '@/lib/auth'
+
+// Mock users storage
+let mockUsers = [
+  {
+    id: '1',
+    email: 'admin@elc.com',
+    password: 'admin123',
+    name: 'Admin User',
+    role: 'admin',
+    department: 'IT',
+    studentId: '',
+    createdAt: new Date().toISOString()
+  }
+]
 
 const signupSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
   email: z.string().email(),
-  studentId: z.string().optional(),
   password: z.string().min(6),
-  role: z.enum(['student', 'faculty']),
-  department: z.string().min(1)
+  name: z.string().min(1),
+  role: z.enum(['student', 'faculty', 'admin']),
+  department: z.string().min(1),
+  studentId: z.string().optional()
 })
 
 export async function POST(request: NextRequest) {
   try {
-    await dbConnect()
-    
     const body = await request.json()
-    const { firstName, lastName, password, role, department, studentId, email } = signupSchema.parse(body)
-
+    const validatedData = signupSchema.parse(body)
+    
     // Check if user already exists
-    const existingUser = await User.findOne({ email })
+    const existingUser = mockUsers.find(user => user.email === validatedData.email)
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
         { status: 409 }
       )
     }
-
+    
     // Check if student ID is required for students
-    if (role === 'student' && !studentId) {
+    if (validatedData.role === 'student' && !validatedData.studentId) {
       return NextResponse.json(
         { error: 'Student ID is required for student accounts' },
         { status: 400 }
       )
     }
-
+    
     // Check if student ID is unique for students
-    if (role === 'student' && studentId) {
-      const existingStudent = await User.findOne({ studentId })
+    if (validatedData.role === 'student' && validatedData.studentId) {
+      const existingStudent = mockUsers.find(user => user.studentId === validatedData.studentId)
       if (existingStudent) {
         return NextResponse.json(
           { error: 'Student ID already exists' },
@@ -48,32 +56,25 @@ export async function POST(request: NextRequest) {
         )
       }
     }
-
-    // Hash password
-    const hashedPassword = await hashPassword(password)
-
+    
     // Create new user
-    const newUser = new User({
-      email,
-      password: hashedPassword,
-      role,
-      name: `${firstName} ${lastName}`,
-      department,
-      studentId: role === 'student' ? studentId : undefined,
-      status: 'active'
-    })
-
-    await newUser.save()
-
+    const newUser = {
+      ...validatedData,
+      id: (mockUsers.length + 1).toString(),
+      createdAt: new Date().toISOString()
+    }
+    
+    mockUsers.push(newUser)
+    
     // Return user data without password
-    const userData = newUser.toJSON()
-
+    const { password, ...userData } = newUser
+    
     return NextResponse.json({
       success: true,
-      user: userData,
-      message: 'User created successfully'
+      message: 'User registered successfully',
+      user: userData
     }, { status: 201 })
-
+    
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
+    
     console.error('Signup error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },

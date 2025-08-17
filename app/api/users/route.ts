@@ -1,8 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import dbConnect from '@/lib/mongodb'
-import User from '@/lib/models/User'
-import { requireRole } from '@/lib/middleware'
+
+// Mock data
+let users = [
+  {
+    id: '1',
+    name: 'Admin User',
+    email: 'admin@elc.com',
+    role: 'admin',
+    department: 'IT',
+    studentId: '',
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: '2',
+    name: 'John Faculty',
+    email: 'john@elc.com',
+    role: 'faculty',
+    department: 'Computer Science',
+    studentId: '',
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: '3',
+    name: 'Alice Student',
+    email: 'alice@elc.com',
+    role: 'student',
+    department: 'Computer Science',
+    studentId: 'CS001',
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+]
 
 const userQuerySchema = z.object({
   role: z.string().optional(),
@@ -31,59 +65,53 @@ const updateUserSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    // Require admin or faculty role to view users
-    const authResult = await requireRole(['admin', 'faculty'])(request)
-    if (authResult) return authResult
-    
-    await dbConnect()
-    
     const { searchParams } = new URL(request.url)
     const query = Object.fromEntries(searchParams.entries())
     
     // Validate query parameters
     const validatedQuery = userQuerySchema.parse(query)
     
-    // Build filter object
-    const filter: any = {}
+    // Apply filters
+    let filteredUsers = [...users]
     
     if (validatedQuery.role) {
-      filter.role = validatedQuery.role
+      filteredUsers = filteredUsers.filter(user => user.role === validatedQuery.role)
     }
     
     if (validatedQuery.department) {
-      filter.department = { $regex: validatedQuery.department, $options: 'i' }
+      filteredUsers = filteredUsers.filter(user => 
+        user.department?.toLowerCase().includes(validatedQuery.department!.toLowerCase())
+      )
     }
     
     if (validatedQuery.status) {
-      filter.status = validatedQuery.status
+      filteredUsers = filteredUsers.filter(user => user.status === validatedQuery.status)
     }
     
     if (validatedQuery.search) {
-      filter.$or = [
-        { name: { $regex: validatedQuery.search, $options: 'i' } },
-        { email: { $regex: validatedQuery.search, $options: 'i' } },
-        { studentId: { $regex: validatedQuery.search, $options: 'i' } }
-      ]
+      const searchTerm = validatedQuery.search.toLowerCase()
+      filteredUsers = filteredUsers.filter(user => 
+        user.name?.toLowerCase().includes(searchTerm) ||
+        user.email?.toLowerCase().includes(searchTerm) ||
+        user.studentId?.toLowerCase().includes(searchTerm)
+      )
     }
+    
+    // Sort by createdAt (newest first)
+    filteredUsers.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     
     // Pagination
     const page = parseInt(validatedQuery.page || '1')
     const limit = parseInt(validatedQuery.limit || '10')
     const skip = (page - 1) * limit
+    const total = filteredUsers.length
     
-    // Get total count for pagination
-    const total = await User.countDocuments(filter)
-    
-    // Get users with pagination
-    const users = await User.find(filter)
-      .select('-password') // Exclude password from response
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
+    // Apply pagination
+    const paginatedUsers = filteredUsers.slice(skip, skip + limit)
     
     return NextResponse.json({
       success: true,
-      users,
+      users: paginatedUsers,
       total,
       page,
       limit,
@@ -108,17 +136,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Require admin role to create users
-    const authResult = await requireRole(['admin'])(request)
-    if (authResult) return authResult
-    
-    await dbConnect()
-    
     const body = await request.json()
     const validatedData = createUserSchema.parse(body)
     
     // Check if user already exists
-    const existingUser = await User.findOne({ email: validatedData.email })
+    const existingUser = users.find(user => user.email === validatedData.email)
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
@@ -136,7 +158,7 @@ export async function POST(request: NextRequest) {
     
     // Check if student ID is unique for students
     if (validatedData.role === 'student' && validatedData.studentId) {
-      const existingStudent = await User.findOne({ studentId: validatedData.studentId })
+      const existingStudent = users.find(user => user.studentId === validatedData.studentId)
       if (existingStudent) {
         return NextResponse.json(
           { error: 'Student ID already exists' },
@@ -145,28 +167,20 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Create new user (without password - they'll need to set it via email)
-    const newUser = new User({
-      email: validatedData.email,
-      role: validatedData.role,
-      name: validatedData.name,
-      department: validatedData.department,
-      studentId: validatedData.role === 'student' ? validatedData.studentId : undefined,
-      status: validatedData.status,
-      // Set a temporary password that user must change
-      password: 'temp-password-' + Date.now()
-    })
+    // Create new user
+    const newUser = {
+      ...validatedData,
+      id: (users.length + 1).toString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
     
-    await newUser.save()
-    
-    // Return user data without password
-    const userData = newUser.toJSON()
-    delete userData.password
+    users.push(newUser)
     
     return NextResponse.json({
       success: true,
-      user: userData,
-      message: 'User created successfully. They will need to set their password.'
+      user: newUser,
+      message: 'User created successfully'
     }, { status: 201 })
     
   } catch (error) {
@@ -187,12 +201,6 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    // Require admin role to update users
-    const authResult = await requireRole(['admin'])(request)
-    if (authResult) return authResult
-    
-    await dbConnect()
-    
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('id')
     
@@ -207,7 +215,7 @@ export async function PUT(request: NextRequest) {
     const validatedData = updateUserSchema.parse(body)
     
     // Check if user exists
-    const existingUser = await User.findById(userId)
+    const existingUser = users.find(user => user.id === userId)
     if (!existingUser) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -217,10 +225,9 @@ export async function PUT(request: NextRequest) {
     
     // Check if student ID is unique when updating
     if (validatedData.studentId && existingUser.role === 'student') {
-      const duplicateStudent = await User.findOne({ 
-        studentId: validatedData.studentId,
-        _id: { $ne: userId }
-      })
+      const duplicateStudent = users.find(user => 
+        user.studentId === validatedData.studentId && user.id !== userId
+      )
       if (duplicateStudent) {
         return NextResponse.json(
           { error: 'Student ID already exists' },
@@ -230,11 +237,9 @@ export async function PUT(request: NextRequest) {
     }
     
     // Update user
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { ...validatedData, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    ).select('-password')
+    const updatedUser = { ...existingUser, ...validatedData, updatedAt: new Date().toISOString() }
+    const userIndex = users.findIndex(user => user.id === userId)
+    users[userIndex] = updatedUser
     
     return NextResponse.json({
       success: true,
@@ -260,12 +265,6 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Require admin role to delete users
-    const authResult = await requireRole(['admin'])(request)
-    if (authResult) return authResult
-    
-    await dbConnect()
-    
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('id')
     
@@ -277,7 +276,7 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Check if user exists
-    const existingUser = await User.findById(userId)
+    const existingUser = users.find(user => user.id === userId)
     if (!existingUser) {
       return NextResponse.json(
         { error: 'User not found' },
@@ -294,11 +293,8 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Soft delete - mark as inactive
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { status: 'inactive', updatedAt: new Date() },
-      { new: true }
-    ).select('-password')
+    const userIndex = users.findIndex(user => user.id === userId)
+    users[userIndex] = { ...existingUser, status: 'inactive', updatedAt: new Date().toISOString() }
     
     return NextResponse.json({
       success: true,

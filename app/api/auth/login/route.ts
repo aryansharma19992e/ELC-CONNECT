@@ -1,63 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import dbConnect from '@/lib/mongodb'
-import User from '@/lib/models/User'
-import { comparePassword, generateToken } from '@/lib/auth'
+
+// Mock users for authentication
+const mockUsers = [
+  {
+    id: '1',
+    email: 'admin@elc.com',
+    password: 'admin123',
+    name: 'Admin User',
+    role: 'admin',
+    department: 'IT'
+  },
+  {
+    id: '2',
+    email: 'faculty@elc.com',
+    password: 'faculty123',
+    name: 'John Faculty',
+    role: 'faculty',
+    department: 'Computer Science'
+  },
+  {
+    id: '3',
+    email: 'student@elc.com',
+    password: 'student123',
+    name: 'Alice Student',
+    role: 'student',
+    department: 'Computer Science'
+  }
+]
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
-  role: z.enum(['student', 'faculty', 'admin'])
+  password: z.string().min(1)
 })
 
 export async function POST(request: NextRequest) {
   try {
-    await dbConnect()
-    
     const body = await request.json()
-    const { email, password, role } = loginSchema.parse(body)
-
-    // Find user by email and role
-    const user = await User.findOne({ email, role, status: 'active' })
+    const validatedData = loginSchema.parse(body)
+    
+    // Find user by email
+    const user = mockUsers.find(u => u.email === validatedData.email)
     
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid credentials or account is inactive' },
+        { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
-
-    // Verify password
-    const isPasswordValid = await comparePassword(password, user.password)
     
-    if (!isPasswordValid) {
+    // Check password (in real app, use bcrypt)
+    if (user.password !== validatedData.password) {
       return NextResponse.json(
-        { error: 'Invalid credentials' },
+        { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
-
-    // Update last login
-    user.lastLogin = new Date()
-    await user.save()
-
-    // Generate JWT token
-    const token = generateToken({
-      userId: user._id.toString(),
-      email: user.email,
-      role: user.role
-    })
-
+    
+    // Create simple token (in real app, use JWT)
+    const token = `mock-token-${user.id}-${Date.now()}`
+    
     // Return user data without password
-    const userData = user.toJSON()
-
+    const { password, ...userData } = user
+    
     return NextResponse.json({
       success: true,
+      message: 'Login successful',
       user: userData,
-      token,
-      message: 'Login successful'
+      token
     })
-
+    
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -65,7 +77,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
+    
     console.error('Login error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
