@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-
-// Mock data
-let attendance = [
-  {
-    id: '1',
-    userId: '3',
-    roomId: '1',
-    date: '2024-01-15',
-    checkInTime: '09:00:00',
-    checkOutTime: '11:00:00',
-    status: 'present',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-]
+import clientPromise from '../../../lib/mongodb'
 
 const attendanceSchema = z.object({
   userId: z.string().min(1),
@@ -31,13 +17,20 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const skip = (page - 1) * limit
-    
-    const total = attendance.length
-    const paginatedAttendance = attendance.slice(skip, skip + limit)
-    
+
+    const client = await clientPromise
+    const db = client.db()
+    const collection = db.collection('attendance')
+
+    const total = await collection.countDocuments()
+    const attendance = await collection.find({})
+      .skip(skip)
+      .limit(limit)
+      .toArray()
+
     return NextResponse.json({
       success: true,
-      attendance: paginatedAttendance,
+      attendance,
       total,
       page,
       limit,
@@ -56,36 +49,49 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = attendanceSchema.parse(body)
-    
+
+    const client = await clientPromise
+    const db = client.db()
+    const collection = db.collection('attendance')
+
     // Check if attendance already exists for this user, room, and date
-    const existingAttendance = attendance.find(record => 
-      record.userId === validatedData.userId &&
-      record.roomId === validatedData.roomId &&
-      record.date === validatedData.date
-    )
-    
+    const existingAttendance = await collection.findOne({
+      userId: validatedData.userId,
+      roomId: validatedData.roomId,
+      date: validatedData.date
+    })
+
     if (existingAttendance) {
       return NextResponse.json(
         { error: 'Attendance record already exists for this user, room, and date' },
         { status: 409 }
       )
     }
-    
+
+    // Insert first to get the insertedId
+    const insertResult = await collection.insertOne({
+      ...validatedData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+
     const newAttendance = {
       ...validatedData,
-      id: (attendance.length + 1).toString(),
+      id: insertResult.insertedId.toString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
-    
-    attendance.push(newAttendance)
-    
+    // Update the document to add the id field
+    await collection.updateOne(
+      { _id: insertResult.insertedId },
+      { $set: { id: newAttendance.id } }
+    )
+
     return NextResponse.json({
       success: true,
       attendance: newAttendance,
       message: 'Attendance recorded successfully'
     }, { status: 201 })
-    
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -93,7 +99,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
     console.error('Attendance POST error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -106,34 +111,43 @@ export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const attendanceId = searchParams.get('id')
-    
+
     if (!attendanceId) {
       return NextResponse.json(
         { error: 'Attendance ID is required' },
         { status: 400 }
       )
     }
-    
+
     const body = await request.json()
-    
-    const existingAttendance = attendance.find(record => record.id === attendanceId)
+    const client = await clientPromise
+    const db = client.db()
+    const collection = db.collection('attendance')
+
+    const existingAttendance = await collection.findOne({ id: attendanceId })
     if (!existingAttendance) {
       return NextResponse.json(
         { error: 'Attendance record not found' },
         { status: 404 }
       )
     }
-    
-    const updatedAttendance = { ...existingAttendance, ...body, updatedAt: new Date().toISOString() }
-    const attendanceIndex = attendance.findIndex(record => record.id === attendanceId)
-    attendance[attendanceIndex] = updatedAttendance
-    
+
+    const updatedAttendance = {
+      ...existingAttendance,
+      ...body,
+      updatedAt: new Date().toISOString()
+    }
+
+    await collection.updateOne(
+      { id: attendanceId },
+      { $set: updatedAttendance }
+    )
+
     return NextResponse.json({
       success: true,
       attendance: updatedAttendance,
       message: 'Attendance updated successfully'
     })
-    
   } catch (error) {
     console.error('Attendance PUT error:', error)
     return NextResponse.json(
@@ -147,30 +161,30 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const attendanceId = searchParams.get('id')
-    
+
     if (!attendanceId) {
       return NextResponse.json(
         { error: 'Attendance ID is required' },
         { status: 400 }
       )
     }
-    
-    const existingAttendance = attendance.find(record => record.id === attendanceId)
-    if (!existingAttendance) {
+
+    const client = await clientPromise
+    const db = client.db()
+    const collection = db.collection('attendance')
+
+    const result = await collection.deleteOne({ id: attendanceId })
+    if (result.deletedCount === 0) {
       return NextResponse.json(
         { error: 'Attendance record not found' },
         { status: 404 }
       )
     }
-    
-    // Remove attendance record
-    attendance = attendance.filter(record => record.id !== attendanceId)
-    
+
     return NextResponse.json({
       success: true,
       message: 'Attendance record deleted successfully'
     })
-    
   } catch (error) {
     console.error('Attendance DELETE error:', error)
     return NextResponse.json(
