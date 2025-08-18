@@ -55,28 +55,21 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
-          <Badge className="mb-6 bg-blue-100 text-blue-800 border-blue-200">Educational Learning Center</Badge>
+          <Badge className="mb-6 bg-blue-100 text-blue-800 border-blue-200">Experiential Learning Center</Badge>
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
             Welcome to the <span className="text-blue-600">ELC Building</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
-            The Educational Learning Center is a state-of-the-art facility designed to enhance your academic experience.
+            The Experiential Learning Center is a state-of-the-art facility designed to enhance your academic experience.
             Our smart resource management system streamlines room bookings, equipment access, and collaborative
             learning.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex justify-center">
             <Link href="/signup">
               <Button size="lg" className="bg-blue-600 hover:bg-blue-700 px-8">
                 Get Started Today
               </Button>
             </Link>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-blue-300 text-blue-700 hover:bg-blue-50 px-8 bg-transparent"
-            >
-              Take a Virtual Tour
-            </Button>
           </div>
         </div>
       </section>
@@ -150,11 +143,11 @@ export default function LandingPage() {
             <div>
               <h2 className="text-3xl font-bold text-gray-900 mb-6">About the ELC Building</h2>
               <div className="space-y-4 text-gray-600">
-                <p className="leading-relaxed">
-                  The Educational Learning Center (ELC) is a modern, technology-enhanced facility spanning 50,000 square
-                  feet across 4 floors. Designed with collaboration and innovation in mind, it houses state-of-the-art
-                  classrooms, research labs, and collaborative spaces.
-                </p>
+                                 <p className="leading-relaxed">
+                   The Experiential Learning Center (ELC) is a modern, technology-enhanced facility spanning 50,000 square
+                   feet across 3 floors. Designed with collaboration and innovation in mind, it houses state-of-the-art
+                   classrooms, research labs, and collaborative spaces.
+                 </p>
                 <p className="leading-relaxed">
                   Our building features advanced audio-visual equipment, high-speed internet connectivity, and flexible
                   learning environments that adapt to various teaching methodologies and group sizes.
@@ -236,7 +229,7 @@ export default function LandingPage() {
                 <span className="text-xl font-bold">ELC Connect</span>
               </div>
               <p className="text-gray-400 mb-4">
-                Streamlining resource management and enhancing collaboration in the Educational Learning Center.
+                Streamlining resource management and enhancing collaboration in the Experiential Learning Center.
               </p>
             </div>
 
@@ -264,7 +257,7 @@ export default function LandingPage() {
             <div>
               <h4 className="font-semibold mb-4">Contact</h4>
               <ul className="space-y-2 text-gray-400 text-sm">
-                <li>Educational Learning Center</li>
+                <li>Experiential Learning Center</li>
                 <li>University Campus</li>
                 <li>support@elc-connect.edu</li>
                 <li>(555) 123-4567</li>

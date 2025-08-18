@@ -498,23 +498,25 @@ export default function UserDashboard() {
 							</CardHeader>
 							<CardContent>
 								<div className="space-y-3">
-									{[
-										{ action: "Booked Room A-201", time: "2 hours ago", type: "booking" },
-										{ action: "Attended CS-101 Lecture", time: "1 day ago", type: "attendance" },
-										{ action: "Downloaded Research Paper", time: "2 days ago", type: "resource" },
-									].map((activity, index) => (
-										<div key={index} className="flex items-center space-x-3">
-											<div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-												{activity.type === "booking" && <Calendar className="w-4 h-4 text-blue-600" />}
-												{activity.type === "attendance" && <Users className="w-4 h-4 text-blue-600" />}
-												{activity.type === "resource" && <BookOpen className="w-4 h-4 text-blue-600" />}
+									{recentActivity.length > 0 ? (
+										recentActivity.map((activity, index) => (
+											<div key={index} className="flex items-center space-x-3">
+												<div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+													{activity.type === "booking" && <Calendar className="w-4 h-4 text-blue-600" />}
+													{activity.type === "attendance" && <Users className="w-4 h-4 text-blue-600" />}
+													{activity.type === "resource" && <BookOpen className="w-4 h-4 text-blue-600" />}
+												</div>
+												<div className="flex-1">
+													<p className="text-sm font-medium text-gray-900">{activity.action}</p>
+													<p className="text-xs text-gray-500">{activity.time}</p>
+												</div>
 											</div>
-											<div className="flex-1">
-												<p className="text-sm font-medium text-gray-900">{activity.action}</p>
-												<p className="text-xs text-gray-500">{activity.time}</p>
-											</div>
+										))
+									) : (
+										<div className="text-center py-4 text-gray-500">
+											No recent activity
 										</div>
-									))}
+									)}
 								</div>
 							</CardContent>
 						</Card>
