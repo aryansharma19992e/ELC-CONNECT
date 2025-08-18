@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,8 +14,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, Clock, Users, MapPin, ArrowLeft, Search } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { useRouter } from "next/navigation"
+import { bookingsApi } from "@/lib/api"
 
 export default function BookRoomPage() {
+  const router = useRouter()
   const [selectedDate, setSelectedDate] = useState<Date>()
   const [selectedRoom, setSelectedRoom] = useState("")
   const [timeSlot, setTimeSlot] = useState("")
@@ -25,49 +28,31 @@ export default function BookRoomPage() {
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [filterCapacity, setFilterCapacity] = useState("")
+  const [availableRooms, setAvailableRooms] = useState<any[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isPendingApproval, setIsPendingApproval] = useState(false)
 
-  const [availableRooms] = useState([
-    {
-      id: "A-201",
-      name: "Room A-201",
-      capacity: 8,
-      floor: "2nd Floor",
-      type: "Study Room",
-      equipment: ["Projector", "Whiteboard", "WiFi", "Air Conditioning"],
-      available: true,
-      timeSlots: ["9:00 AM", "11:00 AM", "2:00 PM", "4:00 PM"],
-    },
-    {
-      id: "B-105",
-      name: "Lab B-105",
-      capacity: 20,
-      floor: "1st Floor",
-      type: "Computer Lab",
-      equipment: ["Computers", "Projector", "WiFi", "3D Printer"],
-      available: true,
-      timeSlots: ["10:00 AM", "1:00 PM", "3:00 PM"],
-    },
-    {
-      id: "C-305",
-      name: "Room C-305",
-      capacity: 6,
-      floor: "3rd Floor",
-      type: "Meeting Room",
-      equipment: ["Whiteboard", "WiFi", "Video Conferencing"],
-      available: false,
-      timeSlots: [],
-    },
-    {
-      id: "A-101",
-      name: "Lecture Hall A-101",
-      capacity: 50,
-      floor: "1st Floor",
-      type: "Lecture Hall",
-      equipment: ["Projector", "Microphone", "WiFi", "Recording Equipment"],
-      available: true,
-      timeSlots: ["9:00 AM", "2:00 PM"],
-    },
-  ])
+  useEffect(() => {
+    async function loadRooms() {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const res = await fetch('/api/rooms', { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+      const json = await res.json()
+      if (json?.success) {
+        const mapped = (json.rooms || []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          capacity: r.capacity,
+          floor: r.floor,
+          type: r.type,
+          equipment: r.equipment || [],
+          available: r.available !== false,
+          timeSlots: [] as string[],
+        }))
+        setAvailableRooms(mapped)
+      }
+    }
+    loadRooms()
+  }, [])
 
   const equipmentOptions = [
     "Projector",
@@ -89,7 +74,7 @@ export default function BookRoomPage() {
     }
   }
 
-  const filteredRooms = availableRooms.filter((room) => {
+  const filteredRooms = useMemo(() => availableRooms.filter((room) => {
     const matchesSearch =
       room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       room.type.toLowerCase().includes(searchQuery.toLowerCase())
@@ -98,11 +83,57 @@ export default function BookRoomPage() {
       selectedEquipment.length === 0 || selectedEquipment.every((eq) => room.equipment.includes(eq))
 
     return matchesSearch && matchesCapacity && matchesEquipment
-  })
+  }), [availableRooms, searchQuery, filterCapacity, selectedEquipment])
 
-  const handleBookRoom = () => {
-    // Handle room booking logic
-    alert(`Room ${selectedRoom} booked successfully!`)
+  const handleBookRoom = async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+    if (!token || !stored) {
+      router.push('/login')
+      return
+    }
+    
+    // Validate required fields
+    if (!selectedDate) {
+      alert('Please select a date')
+      return
+    }
+    if (!timeSlot) {
+      alert('Please select a time slot')
+      return
+    }
+    if (!selectedRoom) {
+      alert('Please select a room')
+      return
+    }
+    
+    const u = JSON.parse(stored)
+    const [start, end] = (timeSlot || '').split(' - ').map(s => s.trim())
+    const payload = {
+      userId: u.id,
+      roomId: selectedRoom,
+      date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '',
+      startTime: start,
+      endTime: end,
+      purpose: purpose || 'General booking', // Provide default purpose
+      attendees: attendees ? Number(attendees) : undefined,
+      equipment: selectedEquipment,
+    }
+    try {
+      setIsSubmitting(true)
+      const json = await bookingsApi.create(payload as any)
+      if (json?.success) {
+        setIsPendingApproval(true)
+      } else {
+        console.error('Booking error:', json)
+        alert(json?.error || 'Failed to create booking')
+      }
+    } catch (err) {
+      console.error('Booking request failed:', err)
+      alert('Failed to create booking')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -211,11 +242,15 @@ export default function BookRoomPage() {
                 </div>
 
                 <Button
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
                   onClick={handleBookRoom}
-                  disabled={!selectedRoom || !selectedDate || !timeSlot}
+                  disabled={
+                    isSubmitting ||
+                    isPendingApproval ||
+                    !selectedRoom || !selectedDate || !(timeSlot && timeSlot.includes(' - '))
+                  }
                 >
-                  Book Selected Room
+                  {isPendingApproval ? 'Waiting for approval' : isSubmitting ? 'Submitting…' : 'Book Selected Room'}
                 </Button>
               </CardContent>
             </Card>
@@ -240,12 +275,12 @@ export default function BookRoomPage() {
                         className="pl-10 w-48"
                       />
                     </div>
-                    <Select value={filterCapacity} onValueChange={setFilterCapacity}>
+                    <Select value={filterCapacity} onValueChange={(v) => setFilterCapacity(v === 'any' ? '' : v)}>
                       <SelectTrigger className="w-32">
                         <SelectValue placeholder="Capacity" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any</SelectItem>
+                        <SelectItem value="any">Any</SelectItem>
                         <SelectItem value="5">5+ people</SelectItem>
                         <SelectItem value="10">10+ people</SelectItem>
                         <SelectItem value="20">20+ people</SelectItem>

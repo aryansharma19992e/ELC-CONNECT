@@ -1,3 +1,7 @@
+"use client"
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -5,6 +9,25 @@ import { BookOpen, Calendar, Shield, Users, QrCode, Monitor } from "lucide-react
 import Link from "next/link"
 
 export default function LandingPage() {
+  const router = useRouter()
+
+  // Check if user is already logged in and redirect to appropriate dashboard
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    const user = localStorage.getItem('user')
+    
+    if (token && user) {
+      try {
+        const userData = JSON.parse(user)
+        // Redirect to appropriate dashboard
+        router.push(userData.role === "admin" ? "/admin/dashboard" : "/dashboard")
+      } catch (err) {
+        // Clear invalid data
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+      }
+    }
+  }, [router])
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}

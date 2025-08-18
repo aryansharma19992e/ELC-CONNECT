@@ -1,183 +1,195 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-
-// Mock data
-let bookings = [
-  {
-    id: '1',
-    userId: '3',
-    roomId: '1',
-    startTime: '2024-01-15T09:00:00Z',
-    endTime: '2024-01-15T11:00:00Z',
-    purpose: 'Study session',
-    status: 'confirmed',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-]
+import { connectToDatabase } from '@/lib/db'
+import { Booking } from '@/lib/models/Booking'
+import { requireAuth, requireRole } from '@/lib/auth-guard'
 
 const bookingSchema = z.object({
   userId: z.string().min(1),
   roomId: z.string().min(1),
-  startTime: z.string().min(1),
-  endTime: z.string().min(1),
-  purpose: z.string().min(1)
+  date: z.string().min(1),
+  startTime: z.string().min(1), // This will be like "11:00 AM"
+  endTime: z.string().min(1), // This will be like "1:00 PM"
+  purpose: z.string().min(1), // Required by the database model
+  attendees: z.number().optional(),
+  equipment: z.array(z.string()).optional()
 })
 
 export async function GET(request: NextRequest) {
   try {
+    const guard = requireAuth(request)
+    if (guard.error) return guard.error
+    await connectToDatabase()
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const skip = (page - 1) * limit
-    
-    const total = bookings.length
-    const paginatedBookings = bookings.slice(skip, skip + limit)
-    
-    return NextResponse.json({
-      success: true,
-      bookings: paginatedBookings,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit)
-    })
+
+    const query: any = {}
+    const userId = searchParams.get('userId')
+    const roomId = searchParams.get('roomId')
+    const date = searchParams.get('date')
+    const status = searchParams.get('status')
+    if (userId) query.userId = userId
+    if (roomId) query.roomId = roomId
+    if (date) query.date = date
+    if (status) query.status = status
+
+    const [items, total] = await Promise.all([
+      Booking.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('roomId', 'name'),
+      Booking.countDocuments(query)
+    ])
+
+    const bookings = items.map((b: any) => ({
+      id: b._id.toString(),
+      userId: b.userId.toString(),
+      roomId: b.roomId.toString(),
+      roomName: b.roomId?.name,
+      date: b.date,
+      startTime: b.startTime,
+      endTime: b.endTime,
+      purpose: b.purpose,
+      attendees: b.attendees,
+      equipment: b.equipment || [],
+      status: b.status,
+      createdAt: b.createdAt,
+      updatedAt: b.updatedAt
+    }))
+
+    return NextResponse.json({ success: true, bookings, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('Bookings GET error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = requireAuth(request)
+    if (guard.error) return guard.error
+    await connectToDatabase()
     const body = await request.json()
-    const validatedData = bookingSchema.parse(body)
-    
-    // Check for booking conflicts (simple check)
-    const conflictingBooking = bookings.find(booking => 
-      booking.roomId === validatedData.roomId &&
-      booking.status === 'confirmed' &&
-      new Date(validatedData.startTime) < new Date(booking.endTime) &&
-      new Date(validatedData.endTime) > new Date(booking.startTime)
-    )
-    
-    if (conflictingBooking) {
-      return NextResponse.json(
-        { error: 'Room is already booked for this time period' },
-        { status: 409 }
-      )
+    const validated = bookingSchema.parse(body)
+
+    // Use the separate startTime and endTime from the request
+    const startTime = validated.startTime
+    const endTime = validated.endTime
+
+    // Convert to minutes for comparison
+    const parseTime = (timeStr: string): number => {
+      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i)
+      if (!match) return 0
+      let [_, hours, minutes, ampm] = match
+      let h = parseInt(hours)
+      const m = parseInt(minutes)
+      if (ampm.toLowerCase() === 'pm' && h < 12) h += 12
+      if (ampm.toLowerCase() === 'am' && h === 12) h = 0
+      return h * 60 + m
     }
+
+    const startMinutes = parseTime(startTime)
+    const endMinutes = parseTime(endTime)
     
-    const newBooking = {
-      ...validatedData,
-      id: (bookings.length + 1).toString(),
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    if (startMinutes >= endMinutes) {
+      return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 })
     }
-    
-    bookings.push(newBooking)
-    
-    return NextResponse.json({
-      success: true,
-      booking: newBooking,
-      message: 'Booking created successfully'
-    }, { status: 201 })
-    
+
+    // Check for conflicts
+    const existingBookings = await Booking.find({ 
+      roomId: validated.roomId, 
+      date: validated.date, 
+      status: 'confirmed' 
+    })
+
+    for (const booking of existingBookings) {
+      const existingStart = parseTime(booking.startTime)
+      const existingEnd = parseTime(booking.endTime)
+      if (startMinutes < existingEnd && endMinutes > existingStart) {
+        return NextResponse.json({ error: 'Room is already booked for this time period' }, { status: 409 })
+      }
+    }
+
+    const created = await Booking.create({ 
+      ...validated, 
+      status: 'pending' 
+    })
+    return NextResponse.json({ success: true, booking: {
+      id: created._id.toString(),
+      userId: created.userId.toString(),
+      roomId: created.roomId.toString(),
+      date: created.date,
+      startTime: created.startTime,
+      endTime: created.endTime,
+      purpose: created.purpose,
+      attendees: created.attendees,
+      equipment: created.equipment || [],
+      status: created.status,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt
+    }, message: 'Booking created successfully' }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid input data', details: error.errors },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 })
     }
-    
     console.error('Bookings POST error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
+    const guard = requireRole(request, ['admin'])
+    if (guard.error) return guard.error
+    await connectToDatabase()
     const { searchParams } = new URL(request.url)
-    const bookingId = searchParams.get('id')
-    
-    if (!bookingId) {
-      return NextResponse.json(
-        { error: 'Booking ID is required' },
-        { status: 400 }
-      )
-    }
-    
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+
     const body = await request.json()
-    
-    const existingBooking = bookings.find(booking => booking.id === bookingId)
-    if (!existingBooking) {
-      return NextResponse.json(
-        { error: 'Booking not found' },
-        { status: 404 }
-      )
-    }
-    
-    const updatedBooking = { ...existingBooking, ...body, updatedAt: new Date().toISOString() }
-    const bookingIndex = bookings.findIndex(booking => booking.id === bookingId)
-    bookings[bookingIndex] = updatedBooking
-    
-    return NextResponse.json({
-      success: true,
-      booking: updatedBooking,
-      message: 'Booking updated successfully'
-    })
-    
+    await Booking.updateOne({ _id: id }, { $set: { ...body } })
+    const updated = await Booking.findById(id)
+    if (!updated) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    return NextResponse.json({ success: true, booking: {
+      id: updated._id.toString(),
+      userId: updated.userId.toString(),
+      roomId: updated.roomId.toString(),
+      date: updated.date,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      purpose: updated.purpose,
+      attendees: updated.attendees,
+      equipment: updated.equipment || [],
+      status: updated.status,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt
+    }, message: 'Booking updated successfully' })
   } catch (error) {
     console.error('Bookings PUT error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    const guard = requireRole(request, ['admin'])
+    if (guard.error) return guard.error
+    await connectToDatabase()
     const { searchParams } = new URL(request.url)
-    const bookingId = searchParams.get('id')
-    
-    if (!bookingId) {
-      return NextResponse.json(
-        { error: 'Booking ID is required' },
-        { status: 400 }
-      )
-    }
-    
-    const existingBooking = bookings.find(booking => booking.id === bookingId)
-    if (!existingBooking) {
-      return NextResponse.json(
-        { error: 'Booking not found' },
-        { status: 404 }
-      )
-    }
-    
-    // Remove booking
-    bookings = bookings.filter(booking => booking.id !== bookingId)
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Booking deleted successfully'
-    })
-    
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+
+    const existing = await Booking.findById(id)
+    if (!existing) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+
+    await Booking.deleteOne({ _id: id })
+    return NextResponse.json({ success: true, message: 'Booking deleted successfully' })
   } catch (error) {
     console.error('Bookings DELETE error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 

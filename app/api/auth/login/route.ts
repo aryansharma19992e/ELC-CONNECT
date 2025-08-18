@@ -1,87 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-
-// Mock users for authentication
-const mockUsers = [
-  {
-    id: '1',
-    email: 'admin@elc.com',
-    password: 'admin123',
-    name: 'Admin User',
-    role: 'admin',
-    department: 'IT'
-  },
-  {
-    id: '2',
-    email: 'faculty@elc.com',
-    password: 'faculty123',
-    name: 'John Faculty',
-    role: 'faculty',
-    department: 'Computer Science'
-  },
-  {
-    id: '3',
-    email: 'student@elc.com',
-    password: 'student123',
-    name: 'Alice Student',
-    role: 'student',
-    department: 'Computer Science'
-  }
-]
+import { connectToDatabase } from '@/lib/db'
+import { User } from '@/lib/models/User'
+import { signToken, verifyPassword } from '@/lib/auth'
+import { authRateLimit } from '@/lib/rate-limit'
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  role: z.enum(['student', 'faculty', 'admin']).optional()
 })
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = authRateLimit(request)
+    if (limited) return limited
     const body = await request.json()
     const validatedData = loginSchema.parse(body)
-    
-    // Find user by email
-    const user = mockUsers.find(u => u.email === validatedData.email)
-    
+
+    await connectToDatabase()
+
+    const user = await User.findOne({ email: validatedData.email })
     if (!user) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     }
-    
-    // Check password (in real app, use bcrypt)
-    if (user.password !== validatedData.password) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
+
+    const ok = await verifyPassword(validatedData.password, user.password)
+    if (!ok) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     }
-    
-    // Create simple token (in real app, use JWT)
-    const token = `mock-token-${user.id}-${Date.now()}`
-    
-    // Return user data without password
-    const { password, ...userData } = user
-    
+
+    if (validatedData.role && user.role !== validatedData.role) {
+      return NextResponse.json({ error: 'Role mismatch' }, { status: 403 })
+    }
+
+    const token = signToken({ sub: user._id.toString(), role: user.role })
+
     return NextResponse.json({
       success: true,
       message: 'Login successful',
-      user: userData,
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        department: user.department,
+        studentId: user.studentId,
+        status: user.status,
+        createdAt: user.createdAt
+      },
       token
     })
-    
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid input data', details: error.errors },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 })
     }
-    
     console.error('Login error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

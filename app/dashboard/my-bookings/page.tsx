@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,66 +9,36 @@ import { Calendar, Clock, Users, Edit, Trash2, ArrowLeft, Plus, QrCode } from "l
 import Link from "next/link"
 
 export default function MyBookingsPage() {
-  const [bookings] = useState([
-    {
-      id: 1,
-      room: "Room A-201",
-      date: "2024-01-15",
-      time: "2:00 PM - 4:00 PM",
-      purpose: "Group Study Session",
-      attendees: 4,
-      status: "confirmed",
-      equipment: ["Projector", "Whiteboard"],
-      qrCode: "QR123456",
-    },
-    {
-      id: 2,
-      room: "Lab B-105",
-      date: "2024-01-16",
-      time: "10:00 AM - 12:00 PM",
-      purpose: "Research Project Meeting",
-      attendees: 2,
-      status: "confirmed",
-      equipment: ["Computers", "3D Printer"],
-      qrCode: "QR789012",
-    },
-    {
-      id: 3,
-      room: "Room C-305",
-      date: "2024-01-18",
-      time: "3:00 PM - 5:00 PM",
-      purpose: "Team Presentation Prep",
-      attendees: 6,
-      status: "pending",
-      equipment: ["Projector", "Video Conferencing"],
-      qrCode: null,
-    },
-  ])
+  const [bookings, setBookings] = useState<any[]>([])
+  const [pastBookings, setPastBookings] = useState<any[]>([])
 
-  const [pastBookings] = useState([
-    {
-      id: 4,
-      room: "Room A-201",
-      date: "2024-01-10",
-      time: "1:00 PM - 3:00 PM",
-      purpose: "Study Group",
-      attendees: 3,
-      status: "completed",
-      equipment: ["Whiteboard"],
-      feedback: "Great session, room was perfect!",
-    },
-    {
-      id: 5,
-      room: "Lecture Hall A-101",
-      date: "2024-01-08",
-      time: "9:00 AM - 11:00 AM",
-      purpose: "Project Presentation",
-      attendees: 15,
-      status: "completed",
-      equipment: ["Projector", "Microphone"],
-      feedback: null,
-    },
-  ])
+  async function load() {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('user') : null
+    if (!token || !stored) return
+    const u = JSON.parse(stored)
+    const res = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || '')}&limit=100`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const json = await res.json()
+    if (json?.success) {
+      const list = json.bookings.map((b: any) => ({
+        id: b.id,
+        room: b.roomName || b.roomId,
+        date: b.date,
+        time: `${b.startTime} - ${b.endTime}`,
+        purpose: b.purpose,
+        attendees: b.attendees || 0,
+        status: b.status,
+        equipment: b.equipment || [],
+        qrCode: null,
+      }))
+      setBookings(list.filter((b: any) => b.status === 'pending' || b.status === 'confirmed'))
+      setPastBookings(list.filter((b: any) => b.status === 'completed' || b.status === 'cancelled'))
+    }
+  }
+
+  useEffect(() => { load() }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -85,16 +55,28 @@ export default function MyBookingsPage() {
     }
   }
 
-  const handleCancelBooking = (bookingId: number) => {
-    if (confirm("Are you sure you want to cancel this booking?")) {
-      // Handle cancellation logic
-      alert("Booking cancelled successfully!")
-    }
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!confirm("Cancel this booking?")) return
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    await fetch(`/api/bookings?id=${encodeURIComponent(bookingId)}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    await load()
   }
 
-  const handleGenerateQR = (bookingId: number) => {
-    // Handle QR code generation
-    alert("QR code generated for attendance tracking!")
+  const handleGenerateQR = async (bookingId: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const res = await fetch('/api/attendance/qr-generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ userId: 'self', roomId: bookingId, date: new Date().toISOString().slice(0,10) })
+    })
+    const json = await res.json()
+    if (json?.success) alert('QR generated: ' + json.qrCode)
   }
 
   return (

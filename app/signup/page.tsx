@@ -56,8 +56,16 @@ export default function SignUpPage() {
       })
       
       if (response.success) {
-        // Redirect to login page after successful signup
-        router.push("/login?message=Account created successfully! Please sign in.")
+        // Auto-login then redirect to dashboard
+        const loginRes = await authApi.login(formData.email, formData.password, formData.role)
+        if (loginRes.success && loginRes.data) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user', JSON.stringify(loginRes.data.user))
+          }
+          router.push("/dashboard")
+        } else {
+          router.push("/login?message=Account created successfully! Please sign in.")
+        }
       } else {
         setError(response.error || "Signup failed")
       }

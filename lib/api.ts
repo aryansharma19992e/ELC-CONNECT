@@ -86,9 +86,11 @@ async function apiCall<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,
@@ -118,10 +120,16 @@ async function apiCall<T>(
 // Authentication API calls
 export const authApi = {
   login: async (email: string, password: string, role: string) => {
-    return apiCall('/auth/login', {
+    const res = await apiCall<{ success: boolean; user: any; token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, role }),
     })
+    if (res.success && res.data?.token) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('token', res.data.token)
+      }
+    }
+    return res
   },
 
   signup: async (userData: {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,25 +21,30 @@ import {
   Monitor,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 export default function AdminDashboard() {
-  const [admin] = useState({
-    name: "Dr. Sarah Johnson",
+  const router = useRouter()
+  const [admin, setAdmin] = useState({
+    name: "Admin User",
     role: "System Administrator",
     email: "admin@university.edu",
     avatar: "/admin-avatar.png",
   })
 
-  const [systemStats] = useState({
-    totalUsers: 1247,
-    activeBookings: 89,
-    totalRooms: 156,
+  const [systemStats, setSystemStats] = useState({
+    totalUsers: 0,
+    activeBookings: 0,
+    totalRooms: 0,
     systemUptime: "99.8%",
-    todayBookings: 45,
-    pendingApprovals: 12,
-    securityAlerts: 3,
-    maintenanceIssues: 2,
+    todayBookings: 0,
+    pendingApprovals: 0,
+    securityAlerts: 0,
+    maintenanceIssues: 0,
   })
+
+  const [pendingBookings, setPendingBookings] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const [roomUsageData] = useState([
     { name: "Mon", bookings: 65, capacity: 80 },
@@ -57,61 +62,124 @@ export default function AdminDashboard() {
     { name: "Staff", value: 110, color: "#F59E0B" },
   ])
 
-  const [recentActivity] = useState([
-    {
-      id: 1,
-      user: "John Doe",
-      action: "Booked Room A-201",
-      time: "5 minutes ago",
-      type: "booking",
-      status: "approved",
-    },
-    {
-      id: 2,
-      user: "Jane Smith",
-      action: "Requested Lab B-105",
-      time: "12 minutes ago",
-      type: "request",
-      status: "pending",
-    },
-    {
-      id: 3,
-      user: "Mike Wilson",
-      action: "Cancelled Room C-305",
-      time: "25 minutes ago",
-      type: "cancellation",
-      status: "processed",
-    },
-    {
-      id: 4,
-      user: "System",
-      action: "Security scan completed",
-      time: "1 hour ago",
-      type: "security",
-      status: "completed",
-    },
-  ])
+  const [recentActivity, setRecentActivity] = useState([])
+  const [alerts, setAlerts] = useState([])
 
-  const [alerts] = useState([
-    {
-      id: 1,
-      type: "warning",
-      message: "Room A-105 projector needs maintenance",
-      time: "2 hours ago",
-    },
-    {
-      id: 2,
-      type: "info",
-      message: "New user registration: 15 today",
-      time: "4 hours ago",
-    },
-    {
-      id: 3,
-      type: "error",
-      message: "Failed login attempts detected",
-      time: "6 hours ago",
-    },
-  ])
+  // Fetch real data from the database
+  useEffect(() => {
+    const fetchData = async () => {
+      const token = localStorage.getItem('token')
+      const user = localStorage.getItem('user')
+      
+      if (!token || !user) {
+        router.push('/login')
+        return
+      }
+
+      try {
+        const userData = JSON.parse(user)
+        if (userData.role !== 'admin') {
+          router.push('/dashboard')
+          return
+        }
+
+        setAdmin({
+          name: userData.name || "Admin User",
+          role: "System Administrator",
+          email: userData.email || "admin@university.edu",
+          avatar: "/admin-avatar.png",
+        })
+
+        // Fetch system statistics
+        const [usersRes, bookingsRes, roomsRes, pendingRes] = await Promise.all([
+          fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/bookings', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/rooms', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/bookings?status=pending', { headers: { Authorization: `Bearer ${token}` } })
+        ])
+
+        const [usersData, bookingsData, roomsData, pendingData] = await Promise.all([
+          usersRes.json(),
+          bookingsRes.json(),
+          roomsRes.json(),
+          pendingRes.json()
+        ])
+
+        // Update system stats
+        setSystemStats({
+          totalUsers: usersData.total || 0,
+          activeBookings: bookingsData.total || 0,
+          totalRooms: roomsData.total || 0,
+          systemUptime: "99.8%",
+          todayBookings: bookingsData.total || 0,
+          pendingApprovals: pendingData.total || 0,
+          securityAlerts: 0,
+          maintenanceIssues: 0,
+        })
+
+        // Set pending bookings
+        setPendingBookings(pendingData.bookings || [])
+
+        // Set recent activity (last 5 bookings)
+        const recentBookings = (bookingsData.bookings || []).slice(0, 5).map((booking: any) => ({
+          id: booking.id,
+          user: booking.userName || "Unknown User",
+          action: `Booked ${booking.roomName || "Room"}`,
+          time: new Date(booking.createdAt).toLocaleDateString(),
+          type: "booking",
+          status: booking.status,
+        }))
+        setRecentActivity(recentBookings)
+
+      } catch (error) {
+        console.error('Error fetching admin data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [router])
+
+  const handleApproveBooking = async (bookingId: string) => {
+    const token = localStorage.getItem('token')
+    try {
+      const response = await fetch(`/api/bookings/approve?id=${bookingId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (response.ok) {
+        // Refresh the data
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error('Error approving booking:', error)
+    }
+  }
+
+  const handleRejectBooking = async (bookingId: string) => {
+    const token = localStorage.getItem('token')
+    try {
+      const response = await fetch(`/api/bookings?id=${bookingId}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ status: 'cancelled' })
+      })
+      if (response.ok) {
+        // Refresh the data
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error('Error rejecting booking:', error)
+    }
+  }
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -363,43 +431,44 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div>
-                      <p className="font-medium text-gray-900">Lab B-105</p>
-                      <p className="text-sm text-gray-600">Jane Smith - Research</p>
-                      <p className="text-xs text-gray-500">Tomorrow 2:00 PM</p>
-                    </div>
-                    <div className="flex space-x-1">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700 h-8 px-2">
-                        ✓
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-8 px-2 bg-transparent">
-                        ✗
-                      </Button>
-                    </div>
-                  </div>
+                  {pendingBookings.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">No pending approvals</p>
+                  ) : (
+                    pendingBookings.slice(0, 3).map((booking: any) => (
+                      <div key={booking.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <div>
+                          <p className="font-medium text-gray-900">{booking.roomName || 'Room'}</p>
+                          <p className="text-sm text-gray-600">{booking.userName || 'Unknown User'} - {booking.purpose || 'Booking'}</p>
+                          <p className="text-xs text-gray-500">{booking.date} {booking.startTime} - {booking.endTime}</p>
+                        </div>
+                        <div className="flex space-x-1">
+                          <Button 
+                            size="sm" 
+                            className="bg-green-600 hover:bg-green-700 h-8 px-2"
+                            onClick={() => handleApproveBooking(booking.id)}
+                          >
+                            ✓
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-8 px-2 bg-transparent"
+                            onClick={() => handleRejectBooking(booking.id)}
+                          >
+                            ✗
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
 
-                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div>
-                      <p className="font-medium text-gray-900">Room A-301</p>
-                      <p className="text-sm text-gray-600">Mike Wilson - Meeting</p>
-                      <p className="text-xs text-gray-500">Friday 10:00 AM</p>
-                    </div>
-                    <div className="flex space-x-1">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700 h-8 px-2">
-                        ✓
+                  {pendingBookings.length > 3 && (
+                    <Link href="/admin/bookings">
+                      <Button variant="outline" size="sm" className="w-full bg-transparent">
+                        View All Approvals ({pendingBookings.length})
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 px-2 bg-transparent">
-                        ✗
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Link href="/admin/approvals">
-                    <Button variant="outline" size="sm" className="w-full bg-transparent">
-                      View All Approvals
-                    </Button>
-                  </Link>
+                    </Link>
+                  )}
                 </div>
               </CardContent>
             </Card>
