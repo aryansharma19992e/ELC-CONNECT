@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+<<<<<<< HEAD
 import { connectToDatabase } from '@/lib/db'
 import { User } from '@/lib/models/User'
 import { signToken, verifyPassword } from '@/lib/auth'
 import { authRateLimit } from '@/lib/rate-limit'
+=======
+import clientPromise from '../../../../lib/mongodb'
+>>>>>>> 0c49cc69221556288192b4306b06f7c3f2e7a501
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -18,13 +22,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = loginSchema.parse(body)
 
+<<<<<<< HEAD
     await connectToDatabase()
 
     const user = await User.findOne({ email: validatedData.email })
+=======
+    const client = await clientPromise
+    const db = client.db()
+    const collection = db.collection('users')
+
+    // Find user by email
+    const user = await collection.findOne({ email: validatedData.email })
+>>>>>>> 0c49cc69221556288192b4306b06f7c3f2e7a501
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     }
 
+<<<<<<< HEAD
     const ok = await verifyPassword(validatedData.password, user.password)
     if (!ok) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
@@ -35,6 +49,21 @@ export async function POST(request: NextRequest) {
     }
 
     const token = signToken({ sub: user._id.toString(), role: user.role })
+=======
+    // Check password (plain text for now)
+    if (user.password !== validatedData.password) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      )
+    }
+
+    // Create simple token (in real app, use JWT)
+    const token = `mock-token-${user._id}-${Date.now()}`
+
+    // Return user data without password
+    const { password, ...userData } = user
+>>>>>>> 0c49cc69221556288192b4306b06f7c3f2e7a501
 
     return NextResponse.json({
       success: true,
