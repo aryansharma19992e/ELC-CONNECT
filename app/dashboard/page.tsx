@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Clock, MapPin, Users, Plus, BookOpen, Bell, Settings, LogOut } from "lucide-react"
+import { Calendar, Clock, MapPin, Users, Plus, BookOpen, Bell, Settings, LogOut, CheckCircle } from "lucide-react"
 import Link from "next/link"
 
 interface DashboardUser {
@@ -43,6 +43,18 @@ export default function UserDashboard() {
 		purpose?: string
 		attendees?: number
 		equipment: string[]
+		status: string
+	}>>([])
+	const [availableRooms, setAvailableRooms] = useState<Array<{
+		id: string
+		name: string
+		capacity: number
+		equipment: string[]
+	}>>([])
+	const [recentActivity, setRecentActivity] = useState<Array<{
+		action: string
+		time: string
+		type: string
 	}>>([])
 
 	useEffect(() => {
@@ -64,31 +76,154 @@ export default function UserDashboard() {
 			avatar: "/student-avatar.png",
 		})
 
-		async function load() {
-			try {
-				const res = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=5`, {
-					headers: { Authorization: `Bearer ${token}` },
+			async function load() {
+		try {
+			// Fetch all bookings for this user to calculate stats
+			const allBookingsRes = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=100`, {
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			const allBookingsJson = await allBookingsRes.json()
+			
+			// Fetch upcoming bookings for display
+			const res = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=5`, {
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			const json = await res.json()
+			
+			// Fetch available rooms
+			const roomsRes = await fetch('/api/rooms', {
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			const roomsJson = await roomsRes.json()
+			
+			if (json?.success) {
+				const list = (json.bookings || []).map((b: any) => ({
+					id: b.id,
+					room: b.roomName || b.roomId || "Room",
+					date: b.date || "",
+					time: b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : "",
+					purpose: b.purpose,
+					attendees: b.attendees,
+					equipment: b.equipment || [],
+					status: b.status || "pending",
+				}))
+				setUpcomingBookings(list.slice(0, 3))
+				
+				// Calculate actual stats from all bookings
+				const allBookings = allBookingsJson.bookings || []
+				const totalBookings = allBookings.length
+				
+				// Calculate hours this month
+				const currentMonth = new Date().getMonth()
+				const currentYear = new Date().getFullYear()
+				const monthlyBookings = allBookings.filter((booking: any) => {
+					if (!booking.date) return false
+					const bookingDate = new Date(booking.date)
+					return bookingDate.getMonth() === currentMonth && bookingDate.getFullYear() === currentYear
 				})
-				const json = await res.json()
-				if (json?.success) {
-					const list = (json.bookings || []).map((b: any) => ({
-						id: b.id,
-						room: b.roomName || b.roomId || "Room",
-						date: b.date || "",
-						time: b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : "",
-						purpose: b.purpose,
-						attendees: b.attendees,
-						equipment: b.equipment || [],
+				
+				let hoursThisMonth = 0
+				monthlyBookings.forEach((booking: any) => {
+					if (booking.startTime && booking.endTime) {
+						// Parse time in format like "11:00 AM" or "2:30 PM"
+						const parseTime = (timeStr: string): number => {
+							const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i)
+							if (!match) return 0
+							let [_, hours, minutes, ampm] = match
+							let h = parseInt(hours)
+							const m = parseInt(minutes)
+							if (ampm.toLowerCase() === 'pm' && h < 12) h += 12
+							if (ampm.toLowerCase() === 'am' && h === 12) h = 0
+							return h * 60 + m
+						}
+						
+						const startMinutes = parseTime(booking.startTime)
+						const endMinutes = parseTime(booking.endTime)
+						const duration = (endMinutes - startMinutes) / 60 // hours
+						hoursThisMonth += duration
+					}
+				})
+				
+				// Calculate favorite room
+				const roomCounts: { [key: string]: number } = {}
+				allBookings.forEach((booking: any) => {
+					const roomName = booking.roomName || booking.roomId || "Unknown"
+					roomCounts[roomName] = (roomCounts[roomName] || 0) + 1
+				})
+				const favoriteRoom = Object.keys(roomCounts).length > 0 
+					? Object.keys(roomCounts).reduce((a, b) => roomCounts[a] > roomCounts[b] ? a : b)
+					: "-"
+				
+				// Calculate today's bookings
+				const today = new Date().toISOString().split('T')[0]
+				const todaysBookings = allBookings.filter((booking: any) => booking.date === today)
+				const upcomingToday = todaysBookings.length
+				
+				setQuickStats({
+					totalBookings,
+					hoursThisMonth: Math.round(hoursThisMonth * 10) / 10, // Round to 1 decimal
+					favoriteRoom,
+					upcomingToday,
+				})
+				
+				// Set available rooms
+				if (roomsJson?.success) {
+					const rooms = (roomsJson.rooms || []).map((room: any) => ({
+						id: room.id,
+						name: room.name,
+						capacity: room.capacity,
+						equipment: room.equipment || [],
 					}))
-					setUpcomingBookings(list.slice(0, 3))
-					setQuickStats((s) => ({ ...s, totalBookings: json.total || list.length }))
+					setAvailableRooms(rooms.slice(0, 3)) // Show first 3 available rooms
 				}
-			} finally {
-				setLoading(false)
+				
+				// Generate recent activity from bookings
+				const recentBookings = allBookings.slice(0, 3).map((booking: any) => {
+					const roomName = booking.roomName || booking.roomId || "Room"
+					const action = `Booked ${roomName}`
+					const createdAt = new Date(booking.createdAt || booking.date)
+					const now = new Date()
+					const diffInHours = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60))
+					
+					let time = ""
+					if (diffInHours < 1) {
+						time = "Just now"
+					} else if (diffInHours < 24) {
+						time = `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`
+					} else {
+						const diffInDays = Math.floor(diffInHours / 24)
+						time = `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
+					}
+					
+					return {
+						action,
+						time,
+						type: "booking"
+					}
+				})
+				setRecentActivity(recentBookings)
 			}
+		} finally {
+			setLoading(false)
 		}
+	}
 		load()
 	}, [router])
+
+	const getStatusBadge = (status: string) => {
+		switch (status) {
+			case 'approved':
+				return <Badge className="bg-green-100 text-green-800 text-xs">Approved by Admin</Badge>
+			case 'pending':
+				return <Badge className="bg-yellow-100 text-yellow-800 text-xs">Pending Approval</Badge>
+			case 'cancelled':
+				return <Badge className="bg-red-100 text-red-800 text-xs">Cancelled</Badge>
+			case 'completed':
+				return <Badge className="bg-blue-100 text-blue-800 text-xs">Completed</Badge>
+			default:
+				return <Badge className="bg-gray-100 text-gray-800 text-xs">Unknown</Badge>
+		}
+	}
 
 	if (loading) {
 		return <div className="min-h-screen flex items-center justify-center">Loading...</div>
@@ -298,9 +433,13 @@ export default function UserDashboard() {
 														</Badge>
 													))}
 												</div>
-												<Button size="sm" variant="outline">
-													Modify
-												</Button>
+												{booking.status === 'approved' ? (
+													<Badge className="bg-green-100 text-green-800 text-xs">Approved by Admin</Badge>
+												) : (
+													<Button size="sm" variant="outline">
+														Confirmed
+													</Button>
+												)}
 											</div>
 										</div>
 									))}
@@ -319,31 +458,35 @@ export default function UserDashboard() {
 							</CardHeader>
 							<CardContent>
 								<div className="space-y-3">
-									{[
-										{ room: "A-203", capacity: 8, equipment: ["Projector", "WiFi"] },
-										{ room: "B-101", capacity: 12, equipment: ["Computers", "WiFi"] },
-										{ room: "C-305", capacity: 6, equipment: ["Whiteboard", "WiFi"] },
-									].map((room, index) => (
-										<div
-											key={index}
-											className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200"
-										>
-											<div>
-												<h5 className="font-medium text-gray-900">{room.room}</h5>
-												<p className="text-sm text-gray-600">Capacity: {room.capacity}</p>
-												<div className="flex space-x-1 mt-1">
-													{room.equipment.map((eq, i) => (
-														<Badge key={i} variant="outline" className="text-xs">
-															{eq}
-														</Badge>
-													))}
+									{availableRooms.length > 0 ? (
+										availableRooms.map((room, index) => (
+											<div
+												key={room.id}
+												className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200"
+											>
+												<div>
+													<h5 className="font-medium text-gray-900">{room.name}</h5>
+													<p className="text-sm text-gray-600">Capacity: {room.capacity}</p>
+													<div className="flex space-x-1 mt-1">
+														{room.equipment.map((eq, i) => (
+															<Badge key={i} variant="outline" className="text-xs">
+																{eq}
+															</Badge>
+														))}
+													</div>
 												</div>
+												<Link href="/dashboard/book-room">
+													<Button size="sm" className="bg-green-600 hover:bg-green-700">
+														Book
+													</Button>
+												</Link>
 											</div>
-											<Button size="sm" className="bg-green-600 hover:bg-green-700">
-												Book
-											</Button>
+										))
+									) : (
+										<div className="text-center py-4 text-gray-500">
+											No rooms available at the moment
 										</div>
-									))}
+									)}
 								</div>
 							</CardContent>
 						</Card>

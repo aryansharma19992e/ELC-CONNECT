@@ -43,27 +43,48 @@ export default function AdminDashboard() {
     maintenanceIssues: 0,
   })
 
-  const [pendingBookings, setPendingBookings] = useState([])
+  const [pendingBookings, setPendingBookings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [roomUsageData] = useState([
-    { name: "Mon", bookings: 65, capacity: 80 },
-    { name: "Tue", bookings: 72, capacity: 80 },
-    { name: "Wed", bookings: 78, capacity: 80 },
-    { name: "Thu", bookings: 85, capacity: 80 },
-    { name: "Fri", bookings: 92, capacity: 80 },
-    { name: "Sat", bookings: 45, capacity: 80 },
-    { name: "Sun", bookings: 32, capacity: 80 },
+  const [roomUsageData, setRoomUsageData] = useState([
+    { name: "Mon", bookings: 0, capacity: 80 },
+    { name: "Tue", bookings: 0, capacity: 80 },
+    { name: "Wed", bookings: 0, capacity: 80 },
+    { name: "Thu", bookings: 0, capacity: 80 },
+    { name: "Fri", bookings: 0, capacity: 80 },
+    { name: "Sat", bookings: 0, capacity: 80 },
+    { name: "Sun", bookings: 0, capacity: 80 },
   ])
 
-  const [userTypeData] = useState([
-    { name: "Students", value: 892, color: "#3B82F6" },
-    { name: "Faculty", value: 245, color: "#10B981" },
-    { name: "Staff", value: 110, color: "#F59E0B" },
+  const [userTypeData, setUserTypeData] = useState([
+    { name: "Students", value: 0, color: "#3B82F6" },
+    { name: "Faculty", value: 0, color: "#10B981" },
+    { name: "Staff", value: 0, color: "#F59E0B" },
   ])
 
-  const [recentActivity, setRecentActivity] = useState([])
-  const [alerts, setAlerts] = useState([])
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [alerts, setAlerts] = useState<any[]>([])
+
+  // Calculate room usage data from actual bookings
+  const calculateRoomUsageData = (bookings: any[]) => {
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const usageData = daysOfWeek.map(day => ({ name: day, bookings: 0, capacity: 80 }))
+    
+    bookings.forEach(booking => {
+      if (booking.date) {
+        const bookingDate = new Date(booking.date)
+        const dayOfWeek = bookingDate.getDay() // 0 = Sunday, 1 = Monday, etc.
+        const dayName = daysOfWeek[dayOfWeek]
+        
+        const dayData = usageData.find(day => day.name === dayName)
+        if (dayData) {
+          dayData.bookings += 1
+        }
+      }
+    })
+    
+    return usageData
+  }
 
   // Fetch real data from the database
   useEffect(() => {
@@ -119,6 +140,33 @@ export default function AdminDashboard() {
 
         // Set pending bookings
         setPendingBookings(pendingData.bookings || [])
+
+        // Calculate room usage data from actual bookings
+        if (bookingsData.bookings && bookingsData.bookings.length > 0) {
+          const usageData = calculateRoomUsageData(bookingsData.bookings)
+          setRoomUsageData(usageData)
+        }
+
+        // Calculate user distribution by role
+        if (usersData.users && usersData.users.length > 0) {
+          const roleCounts = {
+            student: 0,
+            faculty: 0,
+            admin: 0
+          }
+          
+          usersData.users.forEach((user: any) => {
+            if (roleCounts.hasOwnProperty(user.role)) {
+              roleCounts[user.role as keyof typeof roleCounts]++
+            }
+          })
+
+          setUserTypeData([
+            { name: "Students", value: roleCounts.student, color: "#3B82F6" },
+            { name: "Faculty", value: roleCounts.faculty, color: "#10B981" },
+            { name: "Staff", value: roleCounts.admin, color: "#F59E0B" },
+          ])
+        }
 
         // Set recent activity (last 5 bookings)
         const recentBookings = (bookingsData.bookings || []).slice(0, 5).map((booking: any) => ({
@@ -177,6 +225,11 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleLogout = () => {
+    localStorage.clear()
+    router.push('/login')
+  }
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
@@ -224,7 +277,7 @@ export default function AdminDashboard() {
                   <p className="text-xs text-gray-500">{admin.role}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>

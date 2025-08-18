@@ -1,13 +1,17 @@
 import clientPromise from './mongodb'
+import { hashPassword } from './auth'
 
 async function seedTestUser() {
   const client = await clientPromise
   const db = client.db()
   const users = db.collection('users')
 
+  // Hash the password before storing
+  const hashedPassword = await hashPassword('testpassword')
+
   const testUser = {
     email: 'testuser@example.com',
-    password: 'testpassword',
+    password: hashedPassword,
     name: 'Test User',
     role: 'student',
     department: 'Test Department',
@@ -19,7 +23,7 @@ async function seedTestUser() {
   // Remove if already exists
   await users.deleteOne({ email: testUser.email })
   await users.insertOne(testUser)
-  console.log('Seeded test user:', testUser)
+  console.log('Seeded test user:', { ...testUser, password: '[HIDDEN]' })
   process.exit(0)
 }
 

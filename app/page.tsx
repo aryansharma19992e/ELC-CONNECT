@@ -11,23 +11,18 @@ import Link from "next/link"
 export default function LandingPage() {
   const router = useRouter()
 
-  // Check if user is already logged in and redirect to appropriate dashboard
+  // Automatically log out users when they visit the landing page
   useEffect(() => {
     const token = localStorage.getItem('token')
     const user = localStorage.getItem('user')
     
     if (token && user) {
-      try {
-        const userData = JSON.parse(user)
-        // Redirect to appropriate dashboard
-        router.push(userData.role === "admin" ? "/admin/dashboard" : "/dashboard")
-      } catch (err) {
-        // Clear invalid data
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-      }
+      // Clear authentication data to log out the user
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      console.log('User automatically logged out from landing page')
     }
-  }, [router])
+  }, [])
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
