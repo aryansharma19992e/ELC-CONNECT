@@ -37,6 +37,11 @@ export default function LandingPage() {
                 <h1 className="text-xl font-bold text-gray-900">ELC Connect</h1>
                 <p className="text-sm text-gray-600">Smart Resource Management</p>
               </div>
+              <Link href="/our-team">
+                <Button variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50 bg-transparent">
+                  Our Team
+                </Button>
+              </Link>
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/login">
