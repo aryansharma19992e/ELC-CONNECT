@@ -211,7 +211,7 @@ export default function LandingPage() {
             <div className="text-center">
               <BookOpen className="w-8 h-8 text-blue-600 mx-auto mb-4" />
               <h3 className="font-semibold text-gray-900 mb-2">Faculty Portal</h3>
-              <p className="text-gray-600 text-sm">Manage classes, resources, and student access</p>
+              <p className="text-gray-600 text-sm">Manage rooms, resources, and faculty access</p>
             </div>
             <div className="text-center">
               <Shield className="w-8 h-8 text-blue-600 mx-auto mb-4" />

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { connectToDatabase } from '@/lib/db'
 import { Booking } from '@/lib/models/Booking'
-import { requireAuth, requireRole } from '@/lib/auth-guard'
+import { requireAuth, requireRole, requireAdmin } from '@/lib/auth-guard'
 
 const bookingSchema = z.object({
   userId: z.string().min(1),
@@ -71,6 +71,14 @@ export async function POST(request: NextRequest) {
   try {
     const guard = requireAuth(request)
     if (guard.error) return guard.error
+    // Additionally ensure user is active
+    const userId = guard.ctx.userId
+    // Lazy import to avoid cycle
+    const { User } = await import('@/lib/models/User')
+    const requester = await User.findById(userId)
+    if (!requester || requester.status !== 'active') {
+      return NextResponse.json({ error: 'Account pending approval' }, { status: 403 })
+    }
     await connectToDatabase()
     const body = await request.json()
     const validated = bookingSchema.parse(body)
@@ -98,11 +106,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 })
     }
 
-    // Check for conflicts
+    // Check for conflicts (pending or confirmed block the slot)
     const existingBookings = await Booking.find({ 
       roomId: validated.roomId, 
       date: validated.date, 
-      status: 'confirmed' 
+      status: { $in: ['pending', 'confirmed'] }
     })
 
     for (const booking of existingBookings) {
@@ -142,7 +150,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    const guard = await requireAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)

@@ -57,9 +57,8 @@ export default function AdminDashboard() {
   ])
 
   const [userTypeData, setUserTypeData] = useState([
-    { name: "Students", value: 0, color: "#3B82F6" },
     { name: "Faculty", value: 0, color: "#10B981" },
-    { name: "Staff", value: 0, color: "#F59E0B" },
+    { name: "Admins", value: 0, color: "#F59E0B" },
   ])
 
   const [recentActivity, setRecentActivity] = useState<any[]>([])
@@ -150,7 +149,6 @@ export default function AdminDashboard() {
         // Calculate user distribution by role
         if (usersData.users && usersData.users.length > 0) {
           const roleCounts = {
-            student: 0,
             faculty: 0,
             admin: 0
           }
@@ -162,9 +160,8 @@ export default function AdminDashboard() {
           })
 
           setUserTypeData([
-            { name: "Students", value: roleCounts.student, color: "#3B82F6" },
             { name: "Faculty", value: roleCounts.faculty, color: "#10B981" },
-            { name: "Staff", value: roleCounts.admin, color: "#F59E0B" },
+            { name: "Admins", value: roleCounts.admin, color: "#F59E0B" },
           ])
         }
 

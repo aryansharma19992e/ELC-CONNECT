@@ -16,7 +16,7 @@ import { authApi } from "@/lib/api"
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [role, setRole] = useState("")
+  // Role selection removed: only Faculty Coordinators and Admins
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
@@ -27,14 +27,24 @@ export default function LoginPage() {
     setError("")
 
     try {
-      const response = await authApi.login(email, password, role)
+      const response = await authApi.login(email, password)
       
       if (response.success && response.data) {
         // Store user data in localStorage (in production, use secure cookies)
         localStorage.setItem('user', JSON.stringify(response.data.user))
         
-        // Redirect based on role
-        router.push(response.data.user.role === "admin" ? "/admin/dashboard" : "/dashboard")
+        // Redirect based on role/status
+        const superEmail = process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL
+        const isSuper = !!response.data.user.isSuperAdmin && (!superEmail || response.data.user.email === superEmail)
+        if (response.data.user.role === "admin" && isSuper) {
+          router.push("/superadmin/dashboard")
+        } else if (response.data.user.role === "admin") {
+          router.push("/admin/dashboard")
+        } else if (response.data.user.status === 'pending') {
+          router.push("/dashboard")
+        } else {
+          router.push("/dashboard")
+        }
       } else {
         setError(response.error || "Login failed")
       }
@@ -105,19 +115,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Login As</Label>
-                <Select value={role} onValueChange={setRole} required>
-                  <SelectTrigger className="border-blue-200 focus:border-blue-500">
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="faculty">Faculty</SelectItem>
-                    <SelectItem value="admin">Administrator</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Removed role selector */}
 
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
                 {isLoading ? "Signing In..." : "Sign In"}

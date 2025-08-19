@@ -19,16 +19,25 @@ async function main() {
   ])
 
   // Users
-  const existingAdmin = await User.findOne({ email: 'admin@university.edu' })
+  // Ensure a permanent super admin account exists
+  const superAdminEmail = process.env.SUPERADMIN_EMAIL || process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL || 'admin@university.edu'
+  const superAdminPassword = process.env.SUPERADMIN_PASSWORD || process.env.NEXT_PUBLIC_SUPERADMIN_PASSWORD || 'password123'
+  const existingAdmin = await User.findOne({ email: superAdminEmail })
   if (!existingAdmin) {
     await User.create({
-      email: 'admin@university.edu',
-      password: await hashPassword('password123'),
-      name: 'Admin User',
+      email: superAdminEmail,
+      password: await hashPassword(superAdminPassword),
+      name: 'Super Admin',
       role: 'admin',
       department: 'IT',
-      status: 'active'
+      status: 'active',
+      isSuperAdmin: true
     })
+  } else if (!existingAdmin.isSuperAdmin) {
+    existingAdmin.isSuperAdmin = true
+    if (existingAdmin.status !== 'active') existingAdmin.status = 'active'
+    if (existingAdmin.role !== 'admin') existingAdmin.role = 'admin'
+    await existingAdmin.save()
   }
 
   const existingFaculty = await User.findOne({ email: 'faculty@university.edu' })
@@ -43,18 +52,7 @@ async function main() {
     })
   }
 
-  const existingStudent = await User.findOne({ email: 'student@university.edu' })
-  if (!existingStudent) {
-    await User.create({
-      email: 'student@university.edu',
-      password: await hashPassword('password123'),
-      name: 'Student User',
-      role: 'student',
-      department: 'Computer Science',
-      studentId: 'STU1001',
-      status: 'active'
-    })
-  }
+  // Removed legacy student seeding
 
   // Rooms
   const ensureRoom = async (room: any) => {

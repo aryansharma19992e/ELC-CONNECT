@@ -105,9 +105,13 @@ function getClientIdentifier(request: NextRequest): string {
 }
 
 // Predefined rate limiters for different endpoints
+// Make auth rate limit configurable and relaxed in development
+const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || (process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 60 * 1000))
+const AUTH_MAX = Number(process.env.AUTH_RATE_LIMIT_MAX || (process.env.NODE_ENV === 'production' ? 5 : 100))
+
 export const authRateLimit = createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 5, // 5 requests per 15 minutes
+  windowMs: AUTH_WINDOW_MS,
+  maxRequests: AUTH_MAX,
   message: 'Too many authentication attempts'
 })
 

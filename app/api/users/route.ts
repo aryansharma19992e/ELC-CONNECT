@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { connectToDatabase } from '@/lib/db'
 import { User } from '@/lib/models/User'
-import { requireRole } from '@/lib/auth-guard'
+import { requireAdmin, requireSuperAdmin } from '@/lib/auth-guard'
 
 const userQuerySchema = z.object({
   role: z.string().optional(),
@@ -15,23 +15,27 @@ const userQuerySchema = z.object({
 
 const createUserSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['student', 'faculty', 'admin']),
+  role: z.enum(['faculty', 'admin']),
   name: z.string().min(1),
   department: z.string().min(1),
-  studentId: z.string().optional(),
-  status: z.enum(['active', 'inactive', 'suspended']).default('active')
+  employeeId: z.string().optional(),
+  phone: z.string().optional(),
+  status: z.enum(['pending', 'active', 'inactive', 'suspended', 'rejected']).default('pending')
 })
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   department: z.string().min(1).optional(),
-  studentId: z.string().optional(),
-  status: z.enum(['active', 'inactive', 'suspended']).optional()
+  employeeId: z.string().optional(),
+  phone: z.string().optional(),
+  adminUntil: z.union([z.string().datetime(), z.null()]).optional(),
+  role: z.enum(['faculty', 'admin']).optional(),
+  status: z.enum(['pending', 'active', 'inactive', 'suspended', 'rejected']).optional()
 })
 
 export async function GET(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    const guard = await requireAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)
@@ -53,7 +57,7 @@ export async function GET(request: NextRequest) {
       mongoQuery.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
-        { studentId: { $regex: search, $options: 'i' } }
+        { employeeId: { $regex: search, $options: 'i' } }
       ]
     }
 
@@ -62,13 +66,18 @@ export async function GET(request: NextRequest) {
       User.countDocuments(mongoQuery)
     ])
 
+    const now = new Date()
     const users = items.map(u => ({
       id: u._id.toString(),
       name: u.name,
       email: u.email,
       role: u.role,
       department: u.department,
-      studentId: u.studentId,
+      employeeId: u.employeeId,
+      phone: u.phone,
+      adminUntil: u.adminUntil && u.adminUntil > now ? u.adminUntil : null,
+      isSuperAdmin: u.isSuperAdmin,
+      effectiveRole: (u.isSuperAdmin || (u.adminUntil && u.adminUntil > new Date())) ? 'admin' : u.role,
       status: u.status,
       createdAt: u.createdAt.toISOString(),
       updatedAt: u.updatedAt.toISOString()
@@ -84,9 +93,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// (moved) GET /api/users/me is implemented in app/api/users/me/route.ts
+
 export async function POST(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    // Creating users is allowed for superadmin only
+    const guard = await requireSuperAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const body = await request.json()
@@ -97,14 +109,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
     }
 
-    if (validatedData.role === 'student' && !validatedData.studentId) {
-      return NextResponse.json({ error: 'Student ID is required for student accounts' }, { status: 400 })
-    }
-
-    if (validatedData.role === 'student' && validatedData.studentId) {
-      const dup = await User.findOne({ studentId: validatedData.studentId })
+    if (validatedData.role === 'faculty' && validatedData.employeeId) {
+      const dup = await User.findOne({ employeeId: validatedData.employeeId })
       if (dup) {
-        return NextResponse.json({ error: 'Student ID already exists' }, { status: 409 })
+        return NextResponse.json({ error: 'Employee ID already exists' }, { status: 409 })
       }
     }
 
@@ -118,7 +126,8 @@ export async function POST(request: NextRequest) {
         email: created.email,
         role: created.role,
         department: created.department,
-        studentId: created.studentId,
+        employeeId: created.employeeId,
+        phone: created.phone,
         status: created.status,
         createdAt: created.createdAt,
         updatedAt: created.updatedAt
@@ -136,7 +145,8 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    // Updating users (status, adminUntil, role) is allowed for superadmin only
+    const guard = await requireSuperAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)
@@ -148,13 +158,18 @@ export async function PUT(request: NextRequest) {
 
     const existing = await User.findById(userId)
     if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (existing.isSuperAdmin) return NextResponse.json({ error: 'Cannot modify super admin' }, { status: 400 })
 
-    if (validatedData.studentId && existing.role === 'student') {
-      const dup = await User.findOne({ studentId: validatedData.studentId, _id: { $ne: existing._id } })
-      if (dup) return NextResponse.json({ error: 'Student ID already exists' }, { status: 409 })
+    if (validatedData.employeeId) {
+      const dup = await User.findOne({ employeeId: validatedData.employeeId, _id: { $ne: existing._id } })
+      if (dup) return NextResponse.json({ error: 'Employee ID already exists' }, { status: 409 })
     }
 
-    await User.updateOne({ _id: existing._id }, { $set: { ...validatedData } })
+    const updates: any = { ...validatedData }
+    if (updates.adminUntil !== undefined) {
+      updates.adminUntil = updates.adminUntil === null ? null : new Date(updates.adminUntil)
+    }
+    await User.updateOne({ _id: existing._id }, { $set: updates })
     const updated = await User.findById(existing._id)
 
     return NextResponse.json({
@@ -165,7 +180,9 @@ export async function PUT(request: NextRequest) {
         email: updated!.email,
         role: updated!.role,
         department: updated!.department,
-        studentId: updated!.studentId,
+        employeeId: updated!.employeeId,
+        phone: updated!.phone,
+        adminUntil: updated!.adminUntil,
         status: updated!.status,
         createdAt: updated!.createdAt,
         updatedAt: updated!.updatedAt
@@ -183,7 +200,8 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    // Deleting/deactivating users is allowed for superadmin only
+    const guard = await requireSuperAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)
@@ -192,7 +210,7 @@ export async function DELETE(request: NextRequest) {
 
     const existing = await User.findById(userId)
     if (!existing) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    if (existing.role === 'admin') return NextResponse.json({ error: 'Cannot delete admin users' }, { status: 400 })
+    if (existing.isSuperAdmin) return NextResponse.json({ error: 'Cannot delete super admin' }, { status: 400 })
 
     await User.updateOne({ _id: existing._id }, { $set: { status: 'inactive' } })
     return NextResponse.json({ success: true, message: 'User deactivated successfully' })

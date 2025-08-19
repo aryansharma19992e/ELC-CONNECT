@@ -10,9 +10,10 @@ const signupSchema = z.object({
   lastName: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(6),
-  role: z.enum(['student', 'faculty']),
+  role: z.literal('faculty').default('faculty'),
   department: z.string().min(1),
-  studentId: z.string().optional()
+  employeeId: z.string().optional(),
+  phone: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -29,14 +30,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 })
     }
 
-    if (validatedData.role === 'student' && !validatedData.studentId) {
-      return NextResponse.json({ error: 'Student ID is required for student accounts' }, { status: 400 })
-    }
-
-    if (validatedData.role === 'student' && validatedData.studentId) {
-      const existingStudent = await User.findOne({ studentId: validatedData.studentId })
-      if (existingStudent) {
-        return NextResponse.json({ error: 'Student ID already exists' }, { status: 409 })
+    if (validatedData.role === 'faculty') {
+      if (!validatedData.employeeId) {
+        return NextResponse.json({ error: 'Employee ID is required for faculty accounts' }, { status: 400 })
+      }
+      const existingFaculty = await User.findOne({ employeeId: validatedData.employeeId })
+      if (existingFaculty) {
+        return NextResponse.json({ error: 'Employee ID already exists' }, { status: 409 })
       }
     }
 
@@ -47,8 +47,9 @@ export async function POST(request: NextRequest) {
       name: `${validatedData.firstName} ${validatedData.lastName}`.trim(),
       role: validatedData.role,
       department: validatedData.department,
-      studentId: validatedData.studentId,
-      status: 'active'
+      employeeId: validatedData.employeeId,
+      phone: validatedData.phone,
+      status: 'pending'
     })
 
     const user = {
@@ -57,7 +58,8 @@ export async function POST(request: NextRequest) {
       name: created.name,
       role: created.role,
       department: created.department,
-      studentId: created.studentId,
+      employeeId: created.employeeId,
+      phone: created.phone,
       status: created.status,
       createdAt: created.createdAt
     }

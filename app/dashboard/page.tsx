@@ -29,6 +29,7 @@ export default function UserDashboard() {
 		avatar: "/student-avatar.png",
 	})
 	const [loading, setLoading] = useState(true)
+	const [status, setStatus] = useState<'pending' | 'active' | 'inactive' | 'suspended' | 'rejected' | ''>('')
 	const [quickStats, setQuickStats] = useState({
 		totalBookings: 0,
 		hoursThisMonth: 0,
@@ -76,8 +77,30 @@ export default function UserDashboard() {
 			avatar: "/student-avatar.png",
 		})
 
+		setStatus(u.status || '')
+
 			async function load() {
 		try {
+			// Refresh user status from server (in case admin approved)
+			try {
+				const meRes = await fetch('/api/users/me', { headers: { Authorization: `Bearer ${token}` } })
+				if (meRes.ok) {
+					const me = await meRes.json()
+					if (me?.user?.status) {
+						setStatus(me.user.status)
+						const updated = { ...u, status: me.user.status, role: me.user.role }
+						localStorage.setItem('user', JSON.stringify(updated))
+						// If user has been granted temporary admin, redirect to admin dashboard
+						if (me.user.role === 'admin') {
+							// small delay to let state update
+							setTimeout(() => {
+								window.location.href = '/admin/dashboard'
+							}, 50)
+							return
+						}
+					}
+				}
+			} catch {}
 			// Fetch all bookings for this user to calculate stats
 			const allBookingsRes = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=100`, {
 				headers: { Authorization: `Bearer ${token}` },
@@ -227,6 +250,23 @@ export default function UserDashboard() {
 
 	if (loading) {
 		return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+	}
+
+	if (status && status !== 'active') {
+		return (
+			<div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+				<Card className="max-w-md w-full text-center">
+					<CardHeader>
+						<CardTitle>Account Pending Approval</CardTitle>
+						<CardDescription>Your account is currently {status}. You will gain access once an admin approves your request.</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<p className="text-sm text-gray-600 mb-4">You can close this tab and check back later. This page will update automatically after approval.</p>
+						<Button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700">Refresh Status</Button>
+					</CardContent>
+				</Card>
+			</div>
+		)
 	}
 
 	return (

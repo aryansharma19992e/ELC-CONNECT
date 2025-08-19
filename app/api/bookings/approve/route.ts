@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { connectToDatabase } from '@/lib/db'
 import { Booking } from '@/lib/models/Booking'
-import { requireRole } from '@/lib/auth-guard'
+import { requireAdmin } from '@/lib/auth-guard'
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    const guard = await requireAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)

@@ -19,10 +19,10 @@ export default function SignUpPage() {
     firstName: "",
     lastName: "",
     email: "",
-    studentId: "",
+    employeeId: "",
+    phone: "",
     password: "",
     confirmPassword: "",
-    role: "",
     department: "",
   })
   const [agreedToTerms, setAgreedToTerms] = useState(false)
@@ -50,14 +50,14 @@ export default function SignUpPage() {
         lastName: formData.lastName,
         email: formData.email,
         password: formData.password,
-        role: formData.role as 'student' | 'faculty',
         department: formData.department,
-        studentId: formData.role === 'student' ? formData.studentId : undefined
+        employeeId: formData.employeeId,
+        phone: formData.phone,
       })
       
       if (response.success) {
         // Auto-login then redirect to dashboard
-        const loginRes = await authApi.login(formData.email, formData.password, formData.role)
+        const loginRes = await authApi.login(formData.email, formData.password)
         if (loginRes.success && loginRes.data) {
           if (typeof window !== 'undefined') {
             localStorage.setItem('user', JSON.stringify(loginRes.data.user))
@@ -148,32 +148,32 @@ export default function SignUpPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)} required>
-                  <SelectTrigger className="border-blue-200 focus:border-blue-500">
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="faculty">Faculty</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Role removed: Only Faculty Coordinators can sign up */}
 
-              {formData.role === "student" && (
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="studentId">Student ID</Label>
+                  <Label htmlFor="employeeId">Employee ID</Label>
                   <Input
-                    id="studentId"
-                    placeholder="STU123456"
-                    value={formData.studentId}
-                    onChange={(e) => handleInputChange("studentId", e.target.value)}
+                    id="employeeId"
+                    placeholder="EMP123456"
+                    value={formData.employeeId}
+                    onChange={(e) => handleInputChange("employeeId", e.target.value)}
                     required
                     className="border-blue-200 focus:border-blue-500"
                   />
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    placeholder="9876543210"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
+                    required
+                    className="border-blue-200 focus:border-blue-500"
+                  />
+                </div>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>

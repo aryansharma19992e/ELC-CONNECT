@@ -8,7 +8,6 @@ import { authRateLimit } from '@/lib/rate-limit'
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  role: z.enum(['student', 'faculty', 'admin']).optional()
 })
 
 export async function POST(request: NextRequest) {
@@ -30,11 +29,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     }
 
-    if (validatedData.role && user.role !== validatedData.role) {
-      return NextResponse.json({ error: 'Role mismatch' }, { status: 403 })
-    }
+    // No role selection; only faculty coordinators and admins exist in system
 
-    const token = signToken({ sub: user._id.toString(), role: user.role })
+    // Elevate to admin if within temporary admin window
+    let effectiveRole = user.role
+    if (user.adminUntil && user.adminUntil > new Date()) {
+      effectiveRole = 'admin'
+    }
+    if (user.isSuperAdmin) {
+      effectiveRole = 'admin'
+    }
+    const token = signToken({ sub: user._id.toString(), role: effectiveRole })
 
     return NextResponse.json({
       success: true,
@@ -43,10 +48,12 @@ export async function POST(request: NextRequest) {
         id: user._id.toString(),
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: effectiveRole,
         department: user.department,
-        studentId: user.studentId,
+        employeeId: user.employeeId,
+        phone: user.phone,
         status: user.status,
+        isSuperAdmin: user.isSuperAdmin,
         createdAt: user.createdAt
       },
       token

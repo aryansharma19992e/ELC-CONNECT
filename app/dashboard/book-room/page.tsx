@@ -29,6 +29,7 @@ export default function BookRoomPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterCapacity, setFilterCapacity] = useState("")
   const [availableRooms, setAvailableRooms] = useState<any[]>([])
+  const [baseRooms, setBaseRooms] = useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPendingApproval, setIsPendingApproval] = useState(false)
 
@@ -48,11 +49,68 @@ export default function BookRoomPage() {
           available: r.available !== false,
           timeSlots: [] as string[],
         }))
+        setBaseRooms(mapped)
         setAvailableRooms(mapped)
       }
     }
     loadRooms()
   }, [])
+
+  // Helper to parse times like "11:00 AM" to minutes since midnight
+  const parseTime = (timeStr: string): number => {
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i)
+    if (!match) return -1
+    let [, hours, minutes, ampm] = match
+    let h = parseInt(hours)
+    const m = parseInt(minutes)
+    if (ampm.toLowerCase() === 'pm' && h < 12) h += 12
+    if (ampm.toLowerCase() === 'am' && h === 12) h = 0
+    return h * 60 + m
+  }
+
+  // Recompute room availability whenever date or timeSlot changes
+  useEffect(() => {
+    async function updateAvailability() {
+      // If no date or no slot chosen, show base availability
+      if (!selectedDate || !timeSlot || !timeSlot.includes(' - ')) {
+        setAvailableRooms(baseRooms)
+        return
+      }
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const dateStr = format(selectedDate, 'yyyy-MM-dd')
+      try {
+        const params = new URLSearchParams({ date: dateStr, status: 'confirmed' })
+        const res = await fetch(`/api/bookings?${params}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+        const json = await res.json()
+        let bookings = json?.bookings || []
+        // Also fetch pending to avoid double booking before approval
+        try {
+          const res2 = await fetch(`/api/bookings?${new URLSearchParams({ date: dateStr, status: 'pending' })}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+          const json2 = await res2.json()
+          bookings = bookings.concat(json2?.bookings || [])
+        } catch {}
+        const [start, end] = timeSlot.split(' - ').map(s => s.trim())
+        const startMin = parseTime(start)
+        const endMin = parseTime(end)
+        const isOverlap = (s: string, e: string) => {
+          const sMin = parseTime(s)
+          const eMin = parseTime(e)
+          return startMin < eMin && endMin > sMin
+        }
+
+        const updated = baseRooms.map(room => {
+          const hasConflict = bookings.some((b: any) => b.roomId === room.id && isOverlap(b.startTime, b.endTime))
+          return { ...room, available: !hasConflict }
+        })
+        setAvailableRooms(updated)
+      } catch (e) {
+        // On error, fall back to base rooms
+        setAvailableRooms(baseRooms)
+      }
+    }
+    updateAvailability()
+  }, [selectedDate, timeSlot, baseRooms])
 
   const equipmentOptions = [
     "Projector",

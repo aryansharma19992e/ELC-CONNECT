@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { connectToDatabase } from '@/lib/db'
 import { Resource } from '@/lib/models/Resource'
-import { requireRole } from '@/lib/auth-guard'
+import { requireAdmin } from '@/lib/auth-guard'
 
 const resourceSchema = z.object({
   title: z.string().min(1),
@@ -120,7 +120,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    const guard = await requireAdmin(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)

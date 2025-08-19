@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Clock, MapPin, Users, Check, X, ArrowLeft, Filter, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 interface BookingItem {
   id: string
@@ -25,6 +26,8 @@ interface BookingItem {
 }
 
 export default function AdminBookingsPage() {
+  const router = useRouter()
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [bookings, setBookings] = useState<BookingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState("all")
@@ -60,6 +63,14 @@ export default function AdminBookingsPage() {
   }
 
   useEffect(() => { 
+    try {
+      const stored = localStorage.getItem('user')
+      if (stored) {
+        const u = JSON.parse(stored)
+        const superEmail = process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL
+        setIsSuperAdmin(!!u.isSuperAdmin && (!superEmail || u.email === superEmail))
+      }
+    } catch {}
     refresh() 
   }, [statusFilter])
 
@@ -131,7 +142,7 @@ export default function AdminBookingsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link href="/admin/dashboard">
+              <Link href={isSuperAdmin ? "/superadmin/dashboard" : "/admin/dashboard"}>
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Admin
