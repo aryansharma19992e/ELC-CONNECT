@@ -363,7 +363,7 @@ export default function UserDashboard() {
 										</Button>
 									</Link>
 
-									<Link href="/dashboard/resources">
+									<Link href="/dashboard/repository">
 										<Button
 											variant="outline"
 											className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
