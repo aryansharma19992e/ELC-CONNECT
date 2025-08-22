@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Clock, Users, MapPin, ArrowLeft, Search } from "lucide-react"
+import { CalendarIcon, Clock, Users, MapPin, ArrowLeft, Search, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { useRouter } from "next/navigation"
@@ -32,6 +32,7 @@ export default function BookRoomPage() {
   const [baseRooms, setBaseRooms] = useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isPendingApproval, setIsPendingApproval] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   useEffect(() => {
     async function loadRooms() {
@@ -80,37 +81,92 @@ export default function BookRoomPage() {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
       const dateStr = format(selectedDate, 'yyyy-MM-dd')
       try {
-        const params = new URLSearchParams({ date: dateStr, status: 'confirmed' })
+        console.log('Checking availability for:', dateStr, timeSlot)
+        
+        // Ask server to refresh completed bookings first (if it's today's date)
+        const today = format(new Date(), 'yyyy-MM-dd')
+        if (dateStr === today) {
+          try {
+            await fetch(`/api/bookings/refresh?date=${dateStr}` , { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+          } catch (e) {
+            console.log('Could not refresh completed bookings:', e)
+          }
+        }
+        
+        // Fetch all bookings for the selected date (both confirmed and pending)
+        const params = new URLSearchParams({ date: dateStr })
         const res = await fetch(`/api/bookings?${params}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
         const json = await res.json()
         let bookings = json?.bookings || []
-        // Also fetch pending to avoid double booking before approval
-        try {
-          const res2 = await fetch(`/api/bookings?${new URLSearchParams({ date: dateStr, status: 'pending' })}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
-          const json2 = await res2.json()
-          bookings = bookings.concat(json2?.bookings || [])
-        } catch {}
+        
+        // Filter bookings to only include confirmed and pending (exclude cancelled and completed)
+        bookings = bookings.filter((b: any) => ['confirmed', 'pending'].includes(b.status))
+        
+        console.log('Found bookings:', bookings.length)
+        console.log('All bookings for date:', bookings)
+        
         const [start, end] = timeSlot.split(' - ').map(s => s.trim())
         const startMin = parseTime(start)
         const endMin = parseTime(end)
-        const isOverlap = (s: string, e: string) => {
-          const sMin = parseTime(s)
-          const eMin = parseTime(e)
-          return startMin < eMin && endMin > sMin
+        
+        const isOverlap = (bookingStart: string, bookingEnd: string) => {
+          const bookingStartMin = parseTime(bookingStart)
+          const bookingEndMin = parseTime(bookingEnd)
+          return startMin < bookingEndMin && endMin > bookingStartMin
         }
 
         const updated = baseRooms.map(room => {
-          const hasConflict = bookings.some((b: any) => b.roomId === room.id && isOverlap(b.startTime, b.endTime))
-          return { ...room, available: !hasConflict }
+          const conflictingBookings = bookings.filter((b: any) => {
+            const roomMatch = String(b.roomId) === String(room.id)
+            const timeConflict = isOverlap(b.startTime, b.endTime)
+            console.log(`Room ${room.name} (${room.id}) vs Booking ${b.roomId}:`, { roomMatch, timeConflict, bookingTime: `${b.startTime}-${b.endTime}` })
+            return roomMatch && timeConflict
+          })
+          
+          const hasConflict = conflictingBookings.length > 0
+          console.log(`Room ${room.name}: ${hasConflict ? 'BOOKED' : 'AVAILABLE'}`, conflictingBookings)
+          
+          return { 
+            ...room, 
+            available: !hasConflict,
+            conflictingBookings: conflictingBookings
+          }
         })
         setAvailableRooms(updated)
       } catch (e) {
+        console.error('Error updating availability:', e)
         // On error, fall back to base rooms
         setAvailableRooms(baseRooms)
       }
     }
     updateAvailability()
-  }, [selectedDate, timeSlot, baseRooms])
+  }, [selectedDate, timeSlot, baseRooms, lastRefresh])
+
+  // Auto-refresh availability every minute to handle slot end time
+  useEffect(() => {
+    if (!selectedDate || !timeSlot) return
+
+    const interval = setInterval(() => {
+      const now = new Date()
+      const selectedDateStr = format(selectedDate, 'yyyy-MM-dd')
+      const todayStr = format(now, 'yyyy-MM-dd')
+      
+      // If the selected date is today, check if the time slot has passed
+      if (selectedDateStr === todayStr) {
+        const [, endTime] = timeSlot.split(' - ').map(s => s.trim())
+        const endMin = parseTime(endTime)
+        const currentMin = now.getHours() * 60 + now.getMinutes()
+        
+        // If the time slot has ended or passed, refresh availability
+        if (currentMin >= endMin) {
+          console.log('Time slot has passed, refreshing availability...')
+          setLastRefresh(now)
+        }
+      }
+    }, 60000) // Check every minute
+
+    return () => clearInterval(interval)
+  }, [selectedDate, timeSlot, lastRefresh])
 
   const equipmentOptions = [
     "Projector",
@@ -130,6 +186,10 @@ export default function BookRoomPage() {
     } else {
       setSelectedEquipment(selectedEquipment.filter((item) => item !== equipment))
     }
+  }
+
+  const handleRefreshAvailability = () => {
+    setLastRefresh(new Date())
   }
 
   const filteredRooms = useMemo(() => availableRooms.filter((room) => {
@@ -321,7 +381,29 @@ export default function BookRoomPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                   <div>
                     <CardTitle>Available Rooms</CardTitle>
-                    <CardDescription>Choose from available spaces</CardDescription>
+                    <CardDescription>
+                      {selectedDate && timeSlot 
+                        ? `Rooms for ${timeSlot} on ${format(selectedDate, "MMM dd, yyyy")}`
+                        : "Choose from available spaces"
+                      }
+                    </CardDescription>
+                    {selectedDate && timeSlot && (
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center space-x-4 text-sm text-gray-600">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span>Available</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 bg-gray-400 rounded-full opacity-50"></div>
+                            <span>Booked</span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Last updated: {format(lastRefresh, 'HH:mm:ss')}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex space-x-2">
                     <div className="relative">
@@ -345,6 +427,17 @@ export default function BookRoomPage() {
                         <SelectItem value="50">50+ people</SelectItem>
                       </SelectContent>
                     </Select>
+                    {selectedDate && timeSlot && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRefreshAvailability}
+                        className="flex items-center space-x-1"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Refresh</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -353,25 +446,28 @@ export default function BookRoomPage() {
                   {filteredRooms.map((room) => (
                     <div
                       key={room.id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      className={`p-4 border rounded-lg transition-all relative ${
                         selectedRoom === room.id
                           ? "border-blue-500 bg-blue-50"
                           : room.available
-                            ? "border-gray-200 hover:border-gray-300"
-                            : "border-gray-200 bg-gray-50 opacity-60"
+                            ? "border-gray-200 hover:border-gray-300 cursor-pointer bg-white"
+                            : "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                       }`}
                       onClick={() => room.available && setSelectedRoom(room.id)}
                     >
+                      {/* Removed floating badge to avoid overlap; inline badge below shows status */}
                       <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                        <div className={`flex-1 ${!room.available ? 'opacity-60' : ''}`}>
                           <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="font-semibold text-gray-900">{room.name}</h3>
+                            <h3 className={`font-semibold ${room.available ? 'text-gray-900' : 'text-gray-500'}`}>
+                              {room.name}
+                            </h3>
                             <Badge variant={room.available ? "default" : "secondary"}>
-                              {room.available ? "Available" : "Occupied"}
+                              {room.available ? "Available" : "Booked"}
                             </Badge>
                           </div>
 
-                          <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
+                          <div className={`flex items-center space-x-4 text-sm mb-3 ${room.available ? 'text-gray-600' : 'text-gray-400'}`}>
                             <span className="flex items-center">
                               <Users className="w-4 h-4 mr-1" />
                               {room.capacity} people
@@ -380,16 +476,37 @@ export default function BookRoomPage() {
                               <MapPin className="w-4 h-4 mr-1" />
                               {room.floor}
                             </span>
-                            <Badge variant="outline">{room.type}</Badge>
+                            <Badge variant="outline" className={!room.available ? 'opacity-60' : ''}>
+                              {room.type}
+                            </Badge>
                           </div>
 
                           <div className="flex flex-wrap gap-1 mb-3">
                             {room.equipment.map((eq, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
+                              <Badge key={index} variant="secondary" className={`text-xs ${!room.available ? 'opacity-60' : ''}`}>
                                 {eq}
                               </Badge>
                             ))}
                           </div>
+
+                          {!room.available && selectedDate && timeSlot && room.conflictingBookings && room.conflictingBookings.length > 0 && (
+                            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                              <p className="text-sm text-red-600 font-medium flex items-center">
+                                <Clock className="w-4 h-4 mr-1" />
+                                Time slot conflict: {timeSlot} on {format(selectedDate, "MMM dd, yyyy")}
+                              </p>
+                              <p className="text-xs text-red-500 mt-1">
+                                This room is already booked during your selected time period
+                              </p>
+                              {room.conflictingBookings.map((booking: any, index: number) => (
+                                <div key={index} className="mt-2 text-xs text-red-600 bg-red-100 p-2 rounded">
+                                  <p><strong>Conflicting booking:</strong> {booking.startTime} - {booking.endTime}</p>
+                                  <p><strong>Status:</strong> {booking.status}</p>
+                                  {booking.purpose && <p><strong>Purpose:</strong> {booking.purpose}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
                           {room.available && room.timeSlots.length > 0 && (
                             <div>
@@ -406,7 +523,7 @@ export default function BookRoomPage() {
                           )}
                         </div>
 
-                        {room.available && (
+                        {room.available ? (
                           <Button
                             variant={selectedRoom === room.id ? "default" : "outline"}
                             size="sm"
@@ -417,6 +534,10 @@ export default function BookRoomPage() {
                           >
                             {selectedRoom === room.id ? "Selected" : "Select"}
                           </Button>
+                        ) : (
+                          <div className="text-sm text-gray-400 font-medium">
+                            Unavailable
+                          </div>
                         )}
                       </div>
                     </div>

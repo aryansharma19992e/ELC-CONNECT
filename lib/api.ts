@@ -12,12 +12,11 @@ export interface ApiResponse<T = any> {
 export interface User {
   id: string
   email: string
-  role: 'faculty' | 'admin'
+  role: 'student' | 'faculty' | 'admin'
   name: string
   department: string
-  employeeId?: string
-  phone?: string
-  status: 'pending' | 'active' | 'inactive' | 'suspended' | 'rejected'
+  studentId?: string
+  status: 'active' | 'inactive' | 'suspended'
   createdAt: string
   updatedAt?: string
 }
@@ -120,10 +119,10 @@ async function apiCall<T>(
 
 // Authentication API calls
 export const authApi = {
-  login: async (email: string, password: string) => {
+  login: async (email: string, password: string, role: string) => {
     const res = await apiCall<{ success: boolean; user: any; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, role }),
     })
     if (res.success && res.data?.token) {
       if (typeof window !== 'undefined') {
@@ -138,18 +137,15 @@ export const authApi = {
     lastName: string
     email: string
     password: string
+    role: 'student' | 'faculty'
     department: string
-    employeeId?: string
-    phone?: string
+    studentId?: string
   }) => {
     return apiCall('/auth/signup', {
       method: 'POST',
       body: JSON.stringify(userData),
     })
   },
-  me: async () => {
-    return apiCall<User>('/users/me')
-  }
 }
 
 // Rooms API calls

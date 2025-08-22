@@ -28,8 +28,8 @@ const mentor: Mentor = {
 }
 
 const members: TeamMember[] = [
+  { name: "Aryan Sharma", roll: "102217019", branch: "Computer Science", photo: "/aryan.jpg" },
   { name: "Abhay Bansal", roll: "102217246", branch: "Computer Science", photo: "/placeholder-user.jpg" },
-  { name: "Aryan Sharma", roll: "102217019", branch: "Computer Science", photo: "/placeholder-user.jpg" },
   { name: "Jagrit Goyal", roll: "102217007", branch: "Computer Science", photo: "/placeholder-user.jpg" },
   { name: "Shantanu Singh", roll: "102217248", branch: "Computer Science", photo: "/placeholder-user.jpg" },
   { name: "Nikunj Wadhwa", roll: "N/A", branch: "ECE", photo: "/placeholder-user.jpg" },
@@ -82,6 +82,7 @@ export default function OurTeamPage() {
                   src={mentor.photo}
                   alt={mentor.name}
                   className="w-32 h-32 rounded-full object-cover border-4 border-white shadow"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-user.jpg' }}
                 />
                 <div>
                   <Badge className="bg-blue-100 text-blue-800 border-blue-200 mb-2">Mentor</Badge>
@@ -103,6 +104,7 @@ export default function OurTeamPage() {
                   src={m.photo}
                   alt={m.name}
                   className="w-24 h-24 rounded-full object-cover border-4 border-white shadow -mt-12"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-user.jpg' }}
                 />
               </CardHeader>
               <CardContent>

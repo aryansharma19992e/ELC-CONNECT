@@ -47,7 +47,8 @@ export async function GET(request: NextRequest) {
     const bookings = items.map((b: any) => ({
       id: b._id.toString(),
       userId: b.userId.toString(),
-      roomId: b.roomId.toString(),
+      // roomId may be populated doc or ObjectId; normalize to string _id
+      roomId: (b.roomId?._id ? b.roomId._id : b.roomId).toString(),
       roomName: b.roomId?.name,
       date: b.date,
       startTime: b.startTime,

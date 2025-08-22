@@ -36,6 +36,7 @@ export default function UserDashboard() {
 		favoriteRoom: "-",
 		upcomingToday: 0,
 	})
+	const [statsLoading, setStatsLoading] = useState(true)
 	const [upcomingBookings, setUpcomingBookings] = useState<Array<{
 		id: string | number
 		room: string
@@ -67,7 +68,22 @@ export default function UserDashboard() {
 			return
 		}
 
-		const u = JSON.parse(stored)
+		let u: any = null
+		try {
+			u = stored ? JSON.parse(stored) : null
+		} catch (err) {
+			// Corrupt user data in localStorage – clear and redirect to login safely
+			console.error('Invalid user data in storage, clearing…', err)
+			localStorage.removeItem('user')
+			setLoading(false)
+			router.push('/login')
+			return
+		}
+		if (!u) {
+			setLoading(false)
+			router.push('/login')
+			return
+		}
 		setUser({
 			id: u.id,
 			name: u.name || "",
@@ -78,6 +94,20 @@ export default function UserDashboard() {
 		})
 
 		setStatus(u.status || '')
+
+		// Hydrate cached stats immediately to avoid empty first row
+		try {
+			const cached = localStorage.getItem('dashboardStats')
+			if (cached) {
+				const parsed = JSON.parse(cached)
+				setQuickStats({
+					totalBookings: parsed.totalBookings || 0,
+					hoursThisMonth: parsed.hoursThisMonth || 0,
+					favoriteRoom: parsed.favoriteRoom || '-',
+					upcomingToday: parsed.upcomingToday || 0,
+				})
+			}
+		} catch {}
 
 			async function load() {
 		try {
@@ -102,23 +132,36 @@ export default function UserDashboard() {
 				}
 			} catch {}
 			// Fetch all bookings for this user to calculate stats
-			const allBookingsRes = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=100`, {
-				headers: { Authorization: `Bearer ${token}` },
-			})
-			const allBookingsJson = await allBookingsRes.json()
+			let allBookingsJson: any = { bookings: [] }
+			try {
+				const allBookingsRes = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=100`, {
+					headers: { Authorization: `Bearer ${token}` },
+					cache: 'no-store',
+				})
+				allBookingsJson = await allBookingsRes.json()
+			} catch { /* keep defaults */ }
 			
 			// Fetch upcoming bookings for display
-			const res = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=5`, {
-				headers: { Authorization: `Bearer ${token}` },
-			})
-			const json = await res.json()
+			let json: any = { success: true, bookings: [] }
+			try {
+				const res = await fetch(`/api/bookings?userId=${encodeURIComponent(u.id || "")}&limit=5`, {
+					headers: { Authorization: `Bearer ${token}` },
+					cache: 'no-store',
+				})
+				json = await res.json()
+			} catch { /* keep defaults */ }
 			
 			// Fetch available rooms
-			const roomsRes = await fetch('/api/rooms', {
-				headers: { Authorization: `Bearer ${token}` },
-			})
-			const roomsJson = await roomsRes.json()
+			let roomsJson: any = { success: true, rooms: [] }
+			try {
+				const roomsRes = await fetch('/api/rooms', {
+					headers: { Authorization: `Bearer ${token}` },
+					cache: 'no-store',
+				})
+				roomsJson = await roomsRes.json()
+			} catch { /* keep defaults */ }
 			
+			// Upcoming bookings list (not critical for stats)
 			if (json?.success) {
 				const list = (json.bookings || []).map((b: any) => ({
 					id: b.id,
@@ -131,101 +174,104 @@ export default function UserDashboard() {
 					status: b.status || "pending",
 				}))
 				setUpcomingBookings(list.slice(0, 3))
-				
-				// Calculate actual stats from all bookings
-				const allBookings = allBookingsJson.bookings || []
-				const totalBookings = allBookings.length
-				
-				// Calculate hours this month
-				const currentMonth = new Date().getMonth()
-				const currentYear = new Date().getFullYear()
-				const monthlyBookings = allBookings.filter((booking: any) => {
-					if (!booking.date) return false
-					const bookingDate = new Date(booking.date)
-					return bookingDate.getMonth() === currentMonth && bookingDate.getFullYear() === currentYear
-				})
-				
-				let hoursThisMonth = 0
-				monthlyBookings.forEach((booking: any) => {
-					if (booking.startTime && booking.endTime) {
-						// Parse time in format like "11:00 AM" or "2:30 PM"
-						const parseTime = (timeStr: string): number => {
-							const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i)
-							if (!match) return 0
-							let [_, hours, minutes, ampm] = match
-							let h = parseInt(hours)
-							const m = parseInt(minutes)
-							if (ampm.toLowerCase() === 'pm' && h < 12) h += 12
-							if (ampm.toLowerCase() === 'am' && h === 12) h = 0
-							return h * 60 + m
-						}
-						
-						const startMinutes = parseTime(booking.startTime)
-						const endMinutes = parseTime(booking.endTime)
-						const duration = (endMinutes - startMinutes) / 60 // hours
-						hoursThisMonth += duration
+			}
+
+			// Calculate actual stats from all bookings (independent of above call)
+			const allBookings = allBookingsJson.bookings || []
+			const totalBookings = allBookings.length
+			
+			// Calculate hours this month
+			const currentMonth = new Date().getMonth()
+			const currentYear = new Date().getFullYear()
+			const monthlyBookings = allBookings.filter((booking: any) => {
+				if (!booking.date) return false
+				const bookingDate = new Date(booking.date)
+				return bookingDate.getMonth() === currentMonth && bookingDate.getFullYear() === currentYear
+			})
+			
+			let hoursThisMonth = 0
+			monthlyBookings.forEach((booking: any) => {
+				if (booking.startTime && booking.endTime) {
+					// Parse time in format like "11:00 AM" or "2:30 PM"
+					const parseTime = (timeStr: string): number => {
+						const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i)
+						if (!match) return 0
+						let [_, hours, minutes, ampm] = match
+						let h = parseInt(hours)
+						const m = parseInt(minutes)
+						if (ampm.toLowerCase() === 'pm' && h < 12) h += 12
+						if (ampm.toLowerCase() === 'am' && h === 12) h = 0
+						return h * 60 + m
 					}
-				})
+					
+					const startMinutes = parseTime(booking.startTime)
+					const endMinutes = parseTime(booking.endTime)
+					const duration = (endMinutes - startMinutes) / 60 // hours
+					hoursThisMonth += duration
+				}
+			})
+			
+			// Calculate favorite room
+			const roomCounts: { [key: string]: number } = {}
+			allBookings.forEach((booking: any) => {
+				const roomName = booking.roomName || booking.roomId || "Unknown"
+				roomCounts[roomName] = (roomCounts[roomName] || 0) + 1
+			})
+			const favoriteRoom = Object.keys(roomCounts).length > 0 
+				? Object.keys(roomCounts).reduce((a, b) => roomCounts[a] > roomCounts[b] ? a : b)
+				: "-"
+			
+			// Calculate today's bookings
+			const today = new Date().toISOString().split('T')[0]
+			const todaysBookings = allBookings.filter((booking: any) => booking.date === today)
+			const upcomingToday = todaysBookings.length
+			
+			const computed = {
+				totalBookings,
+				hoursThisMonth: Math.round(hoursThisMonth * 10) / 10, // Round to 1 decimal
+				favoriteRoom,
+				upcomingToday,
+			}
+			setQuickStats(computed)
+			try { localStorage.setItem('dashboardStats', JSON.stringify(computed)) } catch {}
+			setStatsLoading(false)
+
+			// Set available rooms regardless
+			if (roomsJson?.success) {
+				const rooms = (roomsJson.rooms || []).map((room: any) => ({
+					id: room.id,
+					name: room.name,
+					capacity: room.capacity,
+					equipment: room.equipment || [],
+				}))
+				setAvailableRooms(rooms.slice(0, 3)) // Show first 3 available rooms
+			}
+
+			// Generate recent activity from bookings
+			const recentBookings = allBookings.slice(0, 3).map((booking: any) => {
+				const roomName = booking.roomName || booking.roomId || "Room"
+				const action = `Booked ${roomName}`
+				const createdAt = new Date(booking.createdAt || booking.date)
+				const now = new Date()
+				const diffInHours = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60))
 				
-				// Calculate favorite room
-				const roomCounts: { [key: string]: number } = {}
-				allBookings.forEach((booking: any) => {
-					const roomName = booking.roomName || booking.roomId || "Unknown"
-					roomCounts[roomName] = (roomCounts[roomName] || 0) + 1
-				})
-				const favoriteRoom = Object.keys(roomCounts).length > 0 
-					? Object.keys(roomCounts).reduce((a, b) => roomCounts[a] > roomCounts[b] ? a : b)
-					: "-"
-				
-				// Calculate today's bookings
-				const today = new Date().toISOString().split('T')[0]
-				const todaysBookings = allBookings.filter((booking: any) => booking.date === today)
-				const upcomingToday = todaysBookings.length
-				
-				setQuickStats({
-					totalBookings,
-					hoursThisMonth: Math.round(hoursThisMonth * 10) / 10, // Round to 1 decimal
-					favoriteRoom,
-					upcomingToday,
-				})
-				
-				// Set available rooms
-				if (roomsJson?.success) {
-					const rooms = (roomsJson.rooms || []).map((room: any) => ({
-						id: room.id,
-						name: room.name,
-						capacity: room.capacity,
-						equipment: room.equipment || [],
-					}))
-					setAvailableRooms(rooms.slice(0, 3)) // Show first 3 available rooms
+				let time = ""
+				if (diffInHours < 1) {
+					time = "Just now"
+				} else if (diffInHours < 24) {
+					time = `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`
+				} else {
+					const diffInDays = Math.floor(diffInHours / 24)
+					time = `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
 				}
 				
-				// Generate recent activity from bookings
-				const recentBookings = allBookings.slice(0, 3).map((booking: any) => {
-					const roomName = booking.roomName || booking.roomId || "Room"
-					const action = `Booked ${roomName}`
-					const createdAt = new Date(booking.createdAt || booking.date)
-					const now = new Date()
-					const diffInHours = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60))
-					
-					let time = ""
-					if (diffInHours < 1) {
-						time = "Just now"
-					} else if (diffInHours < 24) {
-						time = `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`
-					} else {
-						const diffInDays = Math.floor(diffInHours / 24)
-						time = `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
-					}
-					
-					return {
-						action,
-						time,
-						type: "booking"
-					}
-				})
-				setRecentActivity(recentBookings)
-			}
+				return {
+					action,
+					time,
+					type: "booking"
+				}
+			})
+			setRecentActivity(recentBookings)
 		} finally {
 			setLoading(false)
 		}
