@@ -281,8 +281,8 @@ export default function UserDashboard() {
 
 	const getStatusBadge = (status: string) => {
 		switch (status) {
-			case 'approved':
-				return <Badge className="bg-green-100 text-green-800 text-xs">Approved by Admin</Badge>
+			case 'confirmed':
+				return <Badge className="bg-green-100 text-green-800 text-xs">Confirmed</Badge>
 			case 'pending':
 				return <Badge className="bg-yellow-100 text-yellow-800 text-xs">Pending Approval</Badge>
 			case 'cancelled':
@@ -519,11 +519,11 @@ export default function UserDashboard() {
 														</Badge>
 													))}
 												</div>
-												{booking.status === 'approved' ? (
-													<Badge className="bg-green-100 text-green-800 text-xs">Approved by Admin</Badge>
+												{booking.status === 'confirmed' ? (
+													<Badge className="bg-green-100 text-green-800 text-xs">Confirmed</Badge>
 												) : (
 													<Button size="sm" variant="outline">
-														Confirmed
+														Pending
 													</Button>
 												)}
 											</div>

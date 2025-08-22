@@ -184,7 +184,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const guard = requireRole(request, ['admin'])
+    const guard = requireAuth(request)
     if (guard.error) return guard.error
     await connectToDatabase()
     const { searchParams } = new URL(request.url)
@@ -194,8 +194,17 @@ export async function DELETE(request: NextRequest) {
     const existing = await Booking.findById(id)
     if (!existing) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
 
-    await Booking.deleteOne({ _id: id })
-    return NextResponse.json({ success: true, message: 'Booking deleted successfully' })
+    // Check if user is admin or the owner of the booking
+    const isAdmin = guard.ctx.role === 'admin'
+    const isOwner = existing.userId.toString() === guard.ctx.userId
+
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ error: 'Unauthorized to cancel this booking' }, { status: 403 })
+    }
+
+    // Instead of deleting, update the status to cancelled
+    await Booking.updateOne({ _id: id }, { $set: { status: 'cancelled' } })
+    return NextResponse.json({ success: true, message: 'Booking cancelled successfully' })
   } catch (error) {
     console.error('Bookings DELETE error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -161,20 +161,20 @@ export default function LandingPage() {
 
               <div className="grid grid-cols-2 gap-4 mt-8">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">120+</div>
+                  <div className="text-2xl font-bold text-blue-600">5</div>
                   <div className="text-sm text-gray-600">Study Rooms</div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">25</div>
+                  <div className="text-2xl font-bold text-blue-600">5</div>
                   <div className="text-sm text-gray-600">Research Labs</div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">8</div>
-                  <div className="text-sm text-gray-600">Lecture Halls</div>
+                  <div className="text-2xl font-bold text-blue-600">4</div>
+                  <div className="text-sm text-gray-600">Activity Halls</div>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">24/7</div>
-                  <div className="text-sm text-gray-600">Access</div>
+                  <div className="text-2xl font-bold text-blue-600">8 am to 8 pm</div>
+                  <div className="text-sm text-gray-600">Accessible</div>
                 </div>
               </div>
             </div>
@@ -205,7 +205,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-6 mt-12">
             <div className="text-center">
               <Users className="w-8 h-8 text-blue-600 mx-auto mb-4" />
-              <h3 className="font-semibold text-gray-900 mb-2">Student Access</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">User Access</h3>
               <p className="text-gray-600 text-sm">Book rooms, access resources, track attendance</p>
             </div>
             <div className="text-center">

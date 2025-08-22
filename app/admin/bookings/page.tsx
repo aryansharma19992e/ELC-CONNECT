@@ -120,7 +120,7 @@ export default function AdminBookingsPage() {
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-green-100 text-green-800'
+      case 'confirmed': return 'bg-green-100 text-green-800'
       case 'pending': return 'bg-yellow-100 text-yellow-800'
       case 'cancelled': return 'bg-red-100 text-red-800'
       case 'completed': return 'bg-blue-100 text-blue-800'
@@ -173,7 +173,7 @@ export default function AdminBookingsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Bookings</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
@@ -222,7 +222,7 @@ export default function AdminBookingsPage() {
                     className={`flex items-start justify-between p-4 border rounded-lg ${
                       booking.status === 'pending' 
                         ? 'bg-yellow-50 border-yellow-200' 
-                        : booking.status === 'approved'
+                        : booking.status === 'confirmed'
                         ? 'bg-green-50 border-green-200'
                         : booking.status === 'cancelled'
                         ? 'bg-red-50 border-red-200'
@@ -294,11 +294,11 @@ export default function AdminBookingsPage() {
                       </div>
                     )}
                     
-                    {booking.status === 'approved' && (
+                    {booking.status === 'confirmed' && (
                       <div className="ml-4">
                         <Badge className="bg-green-100 text-green-800">
                           <Check className="w-4 h-4 mr-1" />
-                          Approved
+                          Confirmed
                         </Badge>
                       </div>
                     )}

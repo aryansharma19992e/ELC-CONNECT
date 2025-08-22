@@ -60,7 +60,7 @@ export default function AttendancePage() {
 
   const loadData = async (userId: string, token: string) => {
     try {
-      // Load approved bookings
+      // Load confirmed bookings
       const bookingsRes = await fetch(`/api/bookings?userId=${userId}&status=confirmed&limit=50`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -226,7 +226,7 @@ export default function AttendancePage() {
               {/* My Bookings */}
               <Card>
                 <CardHeader>
-                  <CardTitle>My Approved Bookings</CardTitle>
+                  <CardTitle>My Confirmed Bookings</CardTitle>
                   <CardDescription>Generate QR codes for your confirmed bookings</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -259,7 +259,7 @@ export default function AttendancePage() {
                       ))
                     ) : (
                       <div className="text-center py-8 text-gray-500">
-                        No approved bookings found
+                        No confirmed bookings found
                       </div>
                     )}
                   </div>

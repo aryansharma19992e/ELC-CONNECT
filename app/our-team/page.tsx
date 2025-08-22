@@ -24,7 +24,7 @@ const mentor: Mentor = {
   name: "Dr. Sharad Saxena",
   title: "ELC Coordinator",
   department: "Department of Computer Science",
-  photo: "/placeholder-user.jpg",
+  photo: "/sharad.jpeg",
 }
 
 const members: TeamMember[] = [
@@ -82,7 +82,7 @@ export default function OurTeamPage() {
                   src={mentor.photo}
                   alt={mentor.name}
                   className="w-32 h-32 rounded-full object-cover border-4 border-white shadow"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-user.jpg' }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/student-avatar.png' }}
                 />
                 <div>
                   <Badge className="bg-blue-100 text-blue-800 border-blue-200 mb-2">Mentor</Badge>
@@ -104,7 +104,7 @@ export default function OurTeamPage() {
                   src={m.photo}
                   alt={m.name}
                   className="w-24 h-24 rounded-full object-cover border-4 border-white shadow -mt-12"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-user.jpg' }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/student-avatar.png' }}
                 />
               </CardHeader>
               <CardContent>

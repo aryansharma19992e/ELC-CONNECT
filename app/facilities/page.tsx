@@ -10,7 +10,7 @@ export default function FacilitiesPage() {
   const roomTypes = [
     {
       type: "Study Rooms",
-      count: 120,
+      count: 1,
       icon: BookOpen,
       description: "Individual and group study spaces with flexible seating arrangements",
       features: ["Flexible seating", "Whiteboards", "WiFi", "Power outlets", "Natural lighting"],
