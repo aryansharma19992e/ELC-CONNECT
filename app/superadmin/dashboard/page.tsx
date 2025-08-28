@@ -16,7 +16,7 @@ export default function SuperAdminDashboard() {
     name: "Super Admin",
     role: "Super Administrator",
     email: "admin@university.edu",
-    avatar: "/admin-avatar.png",
+    avatar: "/student-avatar.png",
   })
 
   const [systemStats, setSystemStats] = useState({
@@ -71,7 +71,7 @@ export default function SuperAdminDashboard() {
         name: u.name || 'Super Admin',
         role: 'Super Administrator',
         email: u.email,
-        avatar: "/admin-avatar.png",
+        avatar: "/student-avatar.png",
       })
 
       try {

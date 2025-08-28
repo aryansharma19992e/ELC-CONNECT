@@ -29,7 +29,7 @@ export default function AdminDashboard() {
     name: "Admin User",
     role: "System Administrator",
     email: "admin@university.edu",
-    avatar: "/admin-avatar.png",
+    avatar: "/student-avatar.png",
   })
 
   const [systemStats, setSystemStats] = useState({
@@ -107,7 +107,7 @@ export default function AdminDashboard() {
           name: userData.name || "Admin User",
           role: "System Administrator",
           email: userData.email || "admin@university.edu",
-          avatar: "/admin-avatar.png",
+          avatar: "/student-avatar.png",
         })
 
         // Fetch system statistics
