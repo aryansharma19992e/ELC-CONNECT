@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useMutation } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,43 +18,41 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   // Role selection removed: only Faculty Coordinators and Admins
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-
-    try {
-      const response = await authApi.login(email, password)
-      
+  const mutation = useMutation({
+    mutationFn: async () => {
+      return await authApi.login(email, password);
+    },
+    onSuccess: (response) => {
       if (response.success && response.data) {
-        // Store user data in localStorage (in production, use secure cookies)
-        localStorage.setItem('user', JSON.stringify(response.data.user))
-        
-        // Redirect based on role/status
-        const superEmail = process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL
-        const isSuper = !!response.data.user.isSuperAdmin && (!superEmail || response.data.user.email === superEmail)
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        const superEmail = process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL;
+        const isSuper = !!response.data.user.isSuperAdmin && (!superEmail || response.data.user.email === superEmail);
         if (response.data.user.role === "admin" && isSuper) {
-          router.push("/superadmin/dashboard")
+          router.push("/superadmin/dashboard");
         } else if (response.data.user.role === "admin") {
-          router.push("/admin/dashboard")
+          router.push("/admin/dashboard");
         } else if (response.data.user.status === 'pending') {
-          router.push("/dashboard")
+          router.push("/dashboard");
         } else {
-          router.push("/dashboard")
+          router.push("/dashboard");
         }
       } else {
-        setError(response.error || "Login failed")
+        setError(response.error || "Login failed");
       }
-    } catch (err) {
-      setError("An unexpected error occurred")
-    } finally {
-      setIsLoading(false)
+    },
+    onError: () => {
+      setError("An unexpected error occurred");
     }
-  }
+  });
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    mutation.mutate();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -117,8 +116,8 @@ export default function LoginPage() {
 
               {/* Removed role selector */}
 
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
-                {isLoading ? "Signing In..." : "Sign In"}
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={mutation.isPending}>
+                {mutation.isPending ? "Signing In..." : "Sign In"}
               </Button>
             </form>
 

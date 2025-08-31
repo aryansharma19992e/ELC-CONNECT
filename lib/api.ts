@@ -119,10 +119,10 @@ async function apiCall<T>(
 
 // Authentication API calls
 export const authApi = {
-  login: async (email: string, password: string, role: string) => {
+  login: async (email: string, password: string) => {
     const res = await apiCall<{ success: boolean; user: any; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, role }),
+      body: JSON.stringify({ email, password }),
     })
     if (res.success && res.data?.token) {
       if (typeof window !== 'undefined') {
