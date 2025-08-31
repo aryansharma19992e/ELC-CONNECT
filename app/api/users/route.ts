@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { connectToDatabase } from '@/lib/db'
 import { User } from '@/lib/models/User'
 import { requireAdmin, requireSuperAdmin } from '@/lib/auth-guard'
+import { cachedAdminApi, cacheInvalidation } from '@/lib/cached-api'
 
 const userQuerySchema = z.object({
   role: z.string().optional(),
@@ -37,12 +38,43 @@ export async function GET(request: NextRequest) {
   try {
     const guard = await requireAdmin(request)
     if (guard.error) return guard.error
-    await connectToDatabase()
+    
     const { searchParams } = new URL(request.url)
     const query = Object.fromEntries(searchParams.entries())
-
     const validatedQuery = userQuerySchema.parse(query)
 
+    // Build filters for caching
+    const filters: Record<string, any> = {}
+    if (validatedQuery.role) filters.role = validatedQuery.role
+    if (validatedQuery.status) filters.status = validatedQuery.status
+    if (validatedQuery.department) filters.department = validatedQuery.department
+    if (validatedQuery.search) filters.search = validatedQuery.search
+
+    // Use cached API for better performance
+    const cachedResult = await cachedAdminApi.getUsers(filters)
+    
+    if (cachedResult) {
+      // Apply pagination to cached results
+      const page = parseInt(validatedQuery.page || '1')
+      const limit = parseInt(validatedQuery.limit || '10')
+      const skip = (page - 1) * limit
+      
+      const paginatedUsers = cachedResult.users.slice(skip, skip + limit)
+      
+      return NextResponse.json({ 
+        success: true, 
+        users: paginatedUsers, 
+        total: cachedResult.total, 
+        page, 
+        limit, 
+        totalPages: Math.ceil(cachedResult.total / limit),
+        cached: true
+      })
+    }
+
+    // Fallback to database if cache miss
+    await connectToDatabase()
+    
     const mongoQuery: any = {}
     if (validatedQuery.role) mongoQuery.role = validatedQuery.role
     if (validatedQuery.status) mongoQuery.status = validatedQuery.status
@@ -83,7 +115,7 @@ export async function GET(request: NextRequest) {
       updatedAt: u.updatedAt.toISOString()
     }))
 
-    return NextResponse.json({ success: true, users, total, page, limit, totalPages: Math.ceil(total / limit) })
+    return NextResponse.json({ success: true, users, total, page, limit, totalPages: Math.ceil(total / limit), cached: false })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid query parameters', details: error.errors }, { status: 400 })
@@ -117,6 +149,9 @@ export async function POST(request: NextRequest) {
     }
 
     const created = await User.create(validatedData)
+
+    // Invalidate relevant cache after creating user
+    await cacheInvalidation.invalidateAdmin()
 
     return NextResponse.json({
       success: true,
@@ -172,6 +207,10 @@ export async function PUT(request: NextRequest) {
     await User.updateOne({ _id: existing._id }, { $set: updates })
     const updated = await User.findById(existing._id)
 
+    // Invalidate relevant cache after updating user
+    await cacheInvalidation.invalidateUser(userId)
+    await cacheInvalidation.invalidateAdmin()
+
     return NextResponse.json({
       success: true,
       user: {
@@ -213,6 +252,11 @@ export async function DELETE(request: NextRequest) {
     if (existing.isSuperAdmin) return NextResponse.json({ error: 'Cannot delete super admin' }, { status: 400 })
 
     await User.updateOne({ _id: existing._id }, { $set: { status: 'inactive' } })
+    
+    // Invalidate relevant cache after deactivating user
+    await cacheInvalidation.invalidateUser(userId)
+    await cacheInvalidation.invalidateAdmin()
+    
     return NextResponse.json({ success: true, message: 'User deactivated successfully' })
   } catch (error) {
     console.error('Users DELETE error:', error)

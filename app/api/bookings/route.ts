@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { connectToDatabase } from '@/lib/db'
 import { Booking } from '@/lib/models/Booking'
 import { requireAuth, requireRole, requireAdmin } from '@/lib/auth-guard'
+import { cachedAdminApi, cachedUserApi, cacheInvalidation } from '@/lib/cached-api'
 
 const bookingSchema = z.object({
   userId: z.string().min(1),
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     const guard = requireAuth(request)
     if (guard.error) return guard.error
-    await connectToDatabase()
+    
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
@@ -35,6 +36,57 @@ export async function GET(request: NextRequest) {
     if (date) query.date = date
     if (status) query.status = status
 
+    // Build filters for caching
+    const filters: Record<string, any> = {}
+    if (userId) filters.userId = userId
+    if (roomId) filters.roomId = roomId
+    if (date) filters.date = date
+    if (status) filters.status = status
+
+    let cachedResult = null
+    
+    // Try to get from cache if it's a user-specific query
+    if (userId && !roomId && !date && !status) {
+      cachedResult = await cachedUserApi.getBookings(userId, filters)
+    } else if (guard.ctx.role === 'admin') {
+      // Try admin cache for admin users
+      cachedResult = await cachedAdminApi.getBookings(filters)
+    }
+
+    if (cachedResult) {
+      // Apply pagination to cached results
+      const paginatedBookings = cachedResult.bookings.slice(skip, skip + limit)
+      
+      const formattedBookings = paginatedBookings.map((b: any) => ({
+        id: b._id?.toString() || b.id,
+        userId: b.userId?.toString() || b.userId,
+        roomId: (b.roomId?._id ? b.roomId._id : b.roomId)?.toString() || b.roomId,
+        roomName: b.roomId?.name || b.roomName,
+        date: b.date,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        purpose: b.purpose,
+        attendees: b.attendees,
+        equipment: b.equipment || [],
+        status: b.status,
+        createdAt: b.createdAt,
+        updatedAt: b.updatedAt
+      }))
+
+      return NextResponse.json({ 
+        success: true, 
+        bookings: formattedBookings, 
+        total: cachedResult.total, 
+        page, 
+        limit, 
+        totalPages: Math.ceil(cachedResult.total / limit),
+        cached: true
+      })
+    }
+
+    // Fallback to database if cache miss
+    await connectToDatabase()
+    
     const [items, total] = await Promise.all([
       Booking.find(query)
         .sort({ createdAt: -1 })
@@ -61,7 +113,7 @@ export async function GET(request: NextRequest) {
       updatedAt: b.updatedAt
     }))
 
-    return NextResponse.json({ success: true, bookings, total, page, limit, totalPages: Math.ceil(total / limit) })
+    return NextResponse.json({ success: true, bookings, total, page, limit, totalPages: Math.ceil(total / limit), cached: false })
   } catch (error) {
     console.error('Bookings GET error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -126,6 +178,11 @@ export async function POST(request: NextRequest) {
       ...validated, 
       status: 'pending' 
     })
+
+    // Invalidate relevant cache after creating booking
+    await cacheInvalidation.invalidateBookings()
+    await cacheInvalidation.invalidateUser(userId)
+
     return NextResponse.json({ success: true, booking: {
       id: created._id.toString(),
       userId: created.userId.toString(),
@@ -162,6 +219,11 @@ export async function PUT(request: NextRequest) {
     await Booking.updateOne({ _id: id }, { $set: { ...body } })
     const updated = await Booking.findById(id)
     if (!updated) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+
+    // Invalidate relevant cache after updating booking
+    await cacheInvalidation.invalidateBookings()
+    await cacheInvalidation.invalidateUser(updated.userId.toString())
+
     return NextResponse.json({ success: true, booking: {
       id: updated._id.toString(),
       userId: updated.userId.toString(),
@@ -204,6 +266,11 @@ export async function DELETE(request: NextRequest) {
 
     // Instead of deleting, update the status to cancelled
     await Booking.updateOne({ _id: id }, { $set: { status: 'cancelled' } })
+    
+    // Invalidate relevant cache after cancelling booking
+    await cacheInvalidation.invalidateBookings()
+    await cacheInvalidation.invalidateUser(existing.userId.toString())
+    
     return NextResponse.json({ success: true, message: 'Booking cancelled successfully' })
   } catch (error) {
     console.error('Bookings DELETE error:', error)
