@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, QrCode, Camera, CheckCircle, XCircle, Clock, MapPin, Users } from "lucide-react"
 import Link from "next/link"
 import QRScanner from "@/components/QRScanner"
+import jsQR from 'jsqr'
 
 interface Booking {
   id: string

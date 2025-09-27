@@ -31,7 +31,7 @@ const members: TeamMember[] = [
   { name: "Aryan Sharma", roll: "102217019", branch: "Computer Science", photo: "/aryanNew.jpeg" },
   { name: "Abhay Bansal", roll: "102217246", branch: "Computer Science", photo: "/abhayNew.jpeg" },
   { name: "Jagrit Goyal", roll: "102217007", branch: "Computer Science", photo: "/jagrit.jpeg" },
-  { name: "Shantanu Singh", roll: "102217248", branch: "Computer Science", photo: "/shantanu.png" },
+  { name: "Shantanu Singh", roll: "102217248", branch: "Computer Science", photo: "/shantanu1.jpeg" },
   { name: "Nikunj Wadhwa", roll: "N/A", branch: "ECE", photo: "/nikunj.jpeg" },
 ]
 
