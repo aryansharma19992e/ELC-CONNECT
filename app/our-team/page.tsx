@@ -28,11 +28,11 @@ const mentor: Mentor = {
 }
 
 const members: TeamMember[] = [
-  { name: "Aryan Sharma", roll: "102217019", branch: "Computer Science", photo: "/aryanNew.jpeg" },
-  { name: "Abhay Bansal", roll: "102217246", branch: "Computer Science", photo: "/abhayNew.jpeg" },
-  { name: "Jagrit Goyal", roll: "102217007", branch: "Computer Science", photo: "/jagrit.jpeg" },
-  { name: "Shantanu Singh", roll: "102217248", branch: "Computer Science", photo: "/shantanu1.jpeg" },
-  { name: "Nikunj Wadhwa", roll: "N/A", branch: "ECE", photo: "/nikunj.jpeg" },
+  { name: "Aryan Sharma", roll: "102217019", branch: "Computer Science and Engineering", photo: "/aryanNew.jpeg" },
+  { name: "Abhay Bansal", roll: "102217246", branch: "Computer Science and Engineering", photo: "/abhayNew.jpeg" },
+  { name: "Jagrit Goyal", roll: "102217007", branch: "Computer Science and Engineering", photo: "/jagrit.jpeg" },
+  { name: "Shantanu Singh", roll: "102217248", branch: "Computer Science and Engineering", photo: "/shantanu1.jpeg" },
+  { name: "Nikunj Wadhwa", roll: "102206112", branch: "Electronics and Communication", photo: "/nikunj.jpeg" },
 ]
 
 export default function OurTeamPage() {
