@@ -3,7 +3,7 @@ import { connectToDatabase } from '@/lib/db'
 import { Booking } from '@/lib/models/Booking'
 import { Attendance } from '@/lib/models/Attendance'
 import { requireAuth } from '@/lib/auth-guard'
-import { generateAttendanceQR, AttendanceQRData } from '@/lib/qr-generator'
+import { generateAttendanceQR } from '@/lib/qr-generator'
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,6 +35,11 @@ export async function GET(request: NextRequest) {
     // Get user details
     const user = booking.userId;
 
+    if (!user || typeof user !== 'object') {
+      console.error('User not found or not populated for booking:', bookingId);
+      return NextResponse.json({ error: 'User details could not be retrieved' }, { status: 500 });
+    }
+
     // Map fields:
     const params = new URLSearchParams()
     params.append('usp', 'pp_url')
@@ -55,7 +60,7 @@ export async function GET(request: NextRequest) {
 
       // Create attendance record
       attendance = await Attendance.create({
-        userId: booking.userId._id,
+        userId: user._id, // Use validated user._id
         roomId: booking.roomId?._id || booking.roomId,
         bookingId: booking._id,
         date: booking.date,
@@ -76,8 +81,8 @@ export async function GET(request: NextRequest) {
       qrCode: attendance.qrCode,
       qrData: attendance.qrCodeData, // Return the URL/string directly
       booking: {
-        id: booking._id.toString(),
-        roomName: booking.roomId?.name,
+        id: (booking._id as any).toString(),
+        roomName: (booking.roomId as any)?.name,
         date: booking.date,
         startTime: booking.startTime,
         endTime: booking.endTime,
@@ -90,8 +95,11 @@ export async function GET(request: NextRequest) {
         checkOutTime: attendance.checkOutTime
       }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('QR generation error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error.message || 'Unknown error'
+    }, { status: 500 })
   }
 }
