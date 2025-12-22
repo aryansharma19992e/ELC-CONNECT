@@ -10,80 +10,71 @@ export async function GET(request: NextRequest) {
     const guard = requireAuth(request)
     if (guard.error) return guard.error
     await connectToDatabase()
-    
+
     const { searchParams } = new URL(request.url)
     const bookingId = searchParams.get('bookingId')
-    
+
     if (!bookingId) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
     }
-    
+
     // Get the booking details
-    const booking = await Booking.findById(bookingId).populate('roomId', 'name')
+    const booking = await Booking.findById(bookingId).populate('roomId', 'name').populate('userId') as any
     if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
-    
+
     // Check if booking is approved
     if (booking.status !== 'confirmed') {
       return NextResponse.json({ error: 'QR code only available for confirmed bookings' }, { status: 400 })
     }
-    
+
+    // Google Form URL
+    const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdepUVI9aUnu_Z7sdNLL21qD6e5YPRd5n9WnfBXlGC0SUqhBg/viewform'
+
+    // Get user details
+    const user = booking.userId;
+
+    // Map fields:
+    const params = new URLSearchParams()
+    params.append('usp', 'pp_url')
+    if (user.employeeId) params.append('entry.959984559', user.employeeId)
+    if (user.name) params.append('entry.726004286', user.name)
+    if (user.department) params.append('entry.393130259', user.department)
+    if (user.phone) params.append('entry.1906449228', user.phone)
+    if (user.email) params.append('entry.362957536', user.email)
+
+    const formUrl = `${GOOGLE_FORM_URL}?${params.toString()}`
+
     // Check if QR code already exists
     let attendance = await Attendance.findOne({ bookingId: booking._id })
-    
+
     if (!attendance) {
-      // Calculate QR code expiration (5 minutes before start time)
-      const bookingDate = new Date(booking.date)
-      const [startHour, startMinute] = booking.startTime.match(/(\d+):(\d+)\s*(AM|PM)/i)?.slice(1) || []
-      
-      if (!startHour) {
-        return NextResponse.json({ error: 'Invalid booking time format' }, { status: 400 })
-      }
-      
-      let startH = parseInt(startHour)
-      const startM = parseInt(startMinute)
-      
-      // Convert to 24-hour format
-      if (booking.startTime.includes('PM') && startH < 12) startH += 12
-      if (booking.startTime.includes('AM') && startH === 12) startH = 0
-      
-      const qrStartTime = new Date(bookingDate)
-      qrStartTime.setHours(startH, startM - 5, 0, 0) // 5 minutes before start
-      
-      const qrExpiresAt = new Date(bookingDate)
-      qrExpiresAt.setHours(startH, startM, 0, 0) // Expires at start time
-      
-      // Create QR code data
-      const qrData: AttendanceQRData = {
-        bookingId: booking._id.toString(),
-        userId: booking.userId.toString(),
-        roomId: booking.roomId.toString(),
-        date: booking.date,
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-        expiresAt: qrExpiresAt.toISOString()
-      }
-      
-      // Generate QR code
-      const qrCodeDataURL = await generateAttendanceQR(qrData)
-      
+      // Generate QR code pointing to the Google Form
+      const qrCodeDataURL = await generateAttendanceQR(formUrl)
+
       // Create attendance record
       attendance = await Attendance.create({
-        userId: booking.userId,
-        roomId: booking.roomId,
+        userId: booking.userId._id,
+        roomId: booking.roomId?._id || booking.roomId,
         bookingId: booking._id,
         date: booking.date,
         qrCode: qrCodeDataURL,
-        qrCodeData: JSON.stringify(qrData),
-        status: 'absent' // Default status, will be updated when scanned
+        qrCodeData: formUrl, // Store URL instead of JSON
+        status: 'absent' // Default status
       })
+    } else if (attendance.qrCodeData !== formUrl) {
+      // Update existing attendance if URL has changed (or was old JSON)
+      const qrCodeDataURL = await generateAttendanceQR(formUrl)
+      attendance.qrCode = qrCodeDataURL
+      attendance.qrCodeData = formUrl
+      await attendance.save()
     }
-    
+
     return NextResponse.json({
       success: true,
       qrCode: attendance.qrCode,
-      qrData: attendance.qrCodeData ? JSON.parse(attendance.qrCodeData) : null,
+      qrData: attendance.qrCodeData, // Return the URL/string directly
       booking: {
         id: booking._id.toString(),
         roomName: booking.roomId?.name,
@@ -93,7 +84,7 @@ export async function GET(request: NextRequest) {
         status: booking.status
       },
       attendance: {
-        id: attendance._id.toString(),
+        id: (attendance._id as any).toString(),
         status: attendance.status,
         checkInTime: attendance.checkInTime,
         checkOutTime: attendance.checkOutTime
