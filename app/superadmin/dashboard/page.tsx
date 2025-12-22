@@ -75,54 +75,48 @@ export default function SuperAdminDashboard() {
       })
 
       try {
-        const [usersRes, bookingsRes, roomsRes, pendingRes] = await Promise.all([
-          fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/bookings', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/rooms', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('/api/bookings?status=pending', { headers: { Authorization: `Bearer ${token}` } })
-        ])
-        const [usersData, bookingsData, roomsData, pendingData] = await Promise.all([
-          usersRes.json(), bookingsRes.json(), roomsRes.json(), pendingRes.json()
-        ])
+        // Use the cached, aggregated admin dashboard endpoint to avoid multiple round-trips
+        const dashRes = await fetch('/api/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } })
+        const dash = await dashRes.json()
+
         setSystemStats({
-          totalUsers: usersData.total || 0,
-          activeBookings: bookingsData.total || 0,
-          totalRooms: roomsData.total || 0,
+          totalUsers: dash.totalUsers || 0,
+          activeBookings: dash.totalBookings || 0,
+          totalRooms: dash.totalRooms || 0,
           systemUptime: "99.8%",
-          todayBookings: bookingsData.total || 0,
-          pendingApprovals: pendingData.total || 0,
+          todayBookings: dash.totalBookings || 0,
+          pendingApprovals: dash.pendingBookings || 0,
           securityAlerts: 0,
           maintenanceIssues: 0,
         })
-        if (bookingsData.bookings && bookingsData.bookings.length > 0) {
-          const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-          const usage = days.map(d => ({ name: d, bookings: 0, capacity: 80 }))
-          bookingsData.bookings.forEach((b: any) => {
-            const date = new Date(b.date)
-            const idx = usage.findIndex(u => u.name === days[date.getDay()])
-            if (idx >= 0) usage[idx].bookings += 1
-          })
-          setRoomUsageData(usage)
+
+        if (dash.roomUsage && Array.isArray(dash.roomUsage)) {
+          setRoomUsageData(dash.roomUsage)
         }
-        if (usersData.users && usersData.users.length > 0) {
-          const counts = { faculty: 0, admin: 0 }
-          usersData.users.forEach((x: any) => {
-            if (x.role === 'faculty') counts.faculty++
-            if (x.role === 'admin') counts.admin++
-          })
+
+        if (dash.userDistribution && Array.isArray(dash.userDistribution)) {
+          const counts = dash.userDistribution.reduce((acc: any, item: any) => {
+            if (item.role === 'faculty') acc.faculty += item.count || 0
+            if (item.role === 'admin') acc.admin += item.count || 0
+            return acc
+          }, { faculty: 0, admin: 0 })
+
           setUserTypeData([
             { name: "Faculty", value: counts.faculty, color: "#10B981" },
             { name: "Admins", value: counts.admin, color: "#F59E0B" },
           ])
         }
-        setRecentActivity((bookingsData.bookings || []).slice(0, 5).map((b: any) => ({
-          id: b.id,
-          user: b.userName || 'Unknown User',
-          action: `Booked ${b.roomName || 'Room'}`,
-          time: new Date(b.createdAt).toLocaleDateString(),
-          type: 'booking',
-          status: b.status,
-        })))
+
+        if (dash.recentBookings && Array.isArray(dash.recentBookings)) {
+          setRecentActivity(dash.recentBookings.slice(0, 5).map((b: any) => ({
+            id: b.id || b._id,
+            user: b.userName || 'Unknown User',
+            action: `Booked ${b.roomName || 'Room'}`,
+            time: b.time || b.date || '',
+            type: 'booking',
+            status: b.status || 'pending',
+          })))
+        }
       } finally {
         setLoading(false)
       }

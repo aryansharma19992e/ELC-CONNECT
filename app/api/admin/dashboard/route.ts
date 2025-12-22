@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-guard'
-import { cachedAdminApi } from '@/lib/cached-api'
+import { cachedAdminApi, cachedGeneralApi } from '@/lib/cached-api'
 
 export async function GET(request: NextRequest) {
     try {
         // Verify admin access
         const authResult = await requireAdmin(request)
-        if (!authResult.success) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        if (authResult.error) return authResult.error
 
         // Fetch dashboard data using cached API
-        const [users, bookings, rooms, pendingBookings] = await Promise.all([
+        const [users, bookings, roomsResult, pendingBookings] = await Promise.all([
             cachedAdminApi.getUsers(),
             cachedAdminApi.getBookings(),
-            cachedAdminApi.getRooms(),
+            cachedGeneralApi.getRooms(),
             cachedAdminApi.getBookings({ status: 'pending' })
         ])
+        const rooms = roomsResult?.rooms || []
 
         // Calculate room usage for the week
         const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']

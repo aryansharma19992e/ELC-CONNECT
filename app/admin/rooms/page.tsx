@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -21,48 +21,36 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MapPin, Plus, Edit, Trash2, ArrowLeft, Search, Users } from "lucide-react"
 import Link from "next/link"
 
+const formatRoomType = (raw?: string) => {
+  switch ((raw || "").toLowerCase()) {
+    case "computer_lab":
+    case "computer lab":
+      return "Computer Lab"
+    case "conference_room":
+    case "conference room":
+      return "Conference Room"
+    case "study_room":
+    case "study room":
+      return "Study Room"
+    case "classroom":
+      return "Classroom"
+    case "meeting_room":
+    case "meeting room":
+      return "Meeting Room"
+    case "lecture_hall":
+    case "lecture hall":
+      return "Lecture Hall"
+    case "research_lab":
+    case "research lab":
+      return "Research Lab"
+    default:
+      return raw || "Other"
+  }
+}
+
 export default function AdminRoomsPage() {
-  const [rooms, setRooms] = useState([
-    {
-      id: "A-201",
-      name: "Room A-201",
-      capacity: 8,
-      floor: "2nd Floor",
-      building: "Building A",
-      type: "Study Room",
-      equipment: ["Projector", "Whiteboard", "WiFi", "Air Conditioning"],
-      status: "available",
-      bookingsToday: 3,
-      utilizationRate: 75,
-      maintenanceDate: "2024-01-20",
-    },
-    {
-      id: "B-105",
-      name: "Lab B-105",
-      capacity: 20,
-      floor: "1st Floor",
-      building: "Building B",
-      type: "Computer Lab",
-      equipment: ["Computers", "Projector", "WiFi", "3D Printer"],
-      status: "occupied",
-      bookingsToday: 5,
-      utilizationRate: 90,
-      maintenanceDate: "2024-01-25",
-    },
-    {
-      id: "C-305",
-      name: "Room C-305",
-      capacity: 6,
-      floor: "3rd Floor",
-      building: "Building C",
-      type: "Meeting Room",
-      equipment: ["Whiteboard", "WiFi", "Video Conferencing"],
-      status: "maintenance",
-      bookingsToday: 0,
-      utilizationRate: 0,
-      maintenanceDate: "2024-01-15",
-    },
-  ])
+  const [rooms, setRooms] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState("All Types")
@@ -77,6 +65,38 @@ export default function AdminRoomsPage() {
     equipment: [] as string[],
     description: "",
   })
+
+  useEffect(() => {
+    async function loadRooms() {
+      try {
+        const res = await fetch('/api/rooms', { cache: 'no-store' })
+        if (res.ok) {
+          const json = await res.json()
+          const mapped = (json.rooms || []).map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            capacity: r.capacity,
+            floor: r.floor || "",
+            building: r.building || "",
+            type: formatRoomType(r.type),
+            equipment: r.equipment || [],
+            status: r.available === false ? "maintenance" : "available",
+            bookingsToday: 0,
+            utilizationRate: 0,
+            maintenanceDate: "",
+          }))
+          setRooms(mapped)
+        } else {
+          setRooms([])
+        }
+      } catch {
+        setRooms([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadRooms()
+  }, [])
 
   const equipmentOptions = [
     "Projector",
@@ -95,8 +115,12 @@ export default function AdminRoomsPage() {
     const matchesSearch =
       room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       room.building.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesType = !filterType || room.type === filterType
-    const matchesStatus = !filterStatus || room.status === filterStatus
+    const matchesType =
+      filterType === "All Types" ||
+      room.type.toLowerCase() === filterType.toLowerCase()
+    const matchesStatus =
+      filterStatus === "All Status" ||
+      room.status.toLowerCase() === filterStatus.toLowerCase()
 
     return matchesSearch && matchesType && matchesStatus
   })
@@ -369,7 +393,21 @@ export default function AdminRoomsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRooms.map((room) => (
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-sm text-gray-500">
+                      Loading rooms...
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && filteredRooms.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-sm text-gray-500">
+                      No rooms found.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && filteredRooms.map((room) => (
                   <TableRow key={room.id}>
                     <TableCell>
                       <div>

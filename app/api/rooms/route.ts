@@ -5,6 +5,24 @@ import { Room } from '@/lib/models/Room'
 import { requireAdmin } from '@/lib/auth-guard'
 import { cachedGeneralApi, cacheInvalidation } from '@/lib/cached-api'
 
+type CachedRoom = {
+  _id?: { toString(): string } | string
+  id?: string
+  name: string
+  capacity: number
+  type: string
+  building?: string
+  floor?: string
+  description?: string
+  equipment?: string[]
+  isActive?: boolean
+  available?: boolean
+  createdAt?: string | Date
+  updatedAt?: string | Date
+}
+
+type RoomsCacheResult = { rooms: CachedRoom[]; total: number }
+
 const roomSchema = z.object({
   name: z.string().min(1),
   capacity: z.number().min(1),
@@ -38,11 +56,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Try to get from cache first
-    const cachedResult = await cachedGeneralApi.getRooms(filters)
+    const cachedResult = await cachedGeneralApi.getRooms(filters) as RoomsCacheResult | null
     
-    if (cachedResult) {
-      const rooms = cachedResult.rooms.map((r: any) => ({
-        id: r._id?.toString() || r.id,
+    // Only use cache when it contains a non-empty rooms array
+    if (cachedResult && Array.isArray(cachedResult.rooms) && cachedResult.rooms.length > 0) {
+      const rooms = cachedResult.rooms.map((r: CachedRoom) => ({
+        id: r._id ? r._id.toString() : r.id,
         name: r.name,
         capacity: r.capacity,
         type: r.type,
@@ -50,7 +69,7 @@ export async function GET(request: NextRequest) {
         floor: r.floor,
         description: r.description,
         equipment: r.equipment || [],
-        available: r.isActive || r.available,
+        available: r.isActive ?? r.available ?? true,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       }))
@@ -66,7 +85,7 @@ export async function GET(request: NextRequest) {
     // Fallback to database if cache miss
     await connectToDatabase()
     
-    const query: any = { isActive: true }
+    const query: any = {}
     if (type) query.type = type
     if (floor) query.floor = floor
     if (capacity) query.capacity = { $gte: Number(capacity) }
@@ -80,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     const items = await Room.find(query).sort({ createdAt: -1 })
     const rooms = items.map(r => ({
-      id: r._id.toString(),
+      id: String(r._id),
       name: r.name,
       capacity: r.capacity,
       type: r.type,
@@ -88,7 +107,7 @@ export async function GET(request: NextRequest) {
       floor: r.floor,
       description: r.description,
       equipment: r.equipment || [],
-      available: r.isActive,
+      available: (r as any).isActive ?? (r as any).available ?? true,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt
     }))
