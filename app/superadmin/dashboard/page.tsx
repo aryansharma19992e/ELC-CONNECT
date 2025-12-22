@@ -158,7 +158,7 @@ export default function SuperAdminDashboard() {
               <div className="flex items-center space-x-3">
                 <Avatar className="w-8 h-8">
                   <AvatarImage src={admin.avatar} alt={admin.name} />
-                  <AvatarFallback>{admin.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
+                  <AvatarFallback>{admin.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block">
                   <p className="text-sm font-medium text-gray-900">{admin.name}</p>
@@ -180,10 +180,10 @@ export default function SuperAdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">Total Users</p><p className="text-2xl font-bold text-gray-900">{systemStats.totalUsers}</p><p className="text-xs text-green-600 flex items-center mt-1"><TrendingUp className="w-3 h-3 mr-1"/>+12% this month</p></div><Users className="w-8 h-8 text-blue-600"/></div></CardContent></Card>
-          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">Active Bookings</p><p className="text-2xl font-bold text-gray-900">{systemStats.activeBookings}</p><p className="text-xs text-blue-600 flex items-center mt-1"><Clock className="w-3 h-3 mr-1"/>{systemStats.todayBookings} today</p></div><Calendar className="w-8 h-8 text-green-600"/></div></CardContent></Card>
-          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">Total Rooms</p><p className="text-2xl font-bold text-gray-900">{systemStats.totalRooms}</p><p className="text-xs text-gray-600 flex items-center mt-1"><CheckCircle className="w-3 h-3 mr-1"/>All operational</p></div><MapPin className="w-8 h-8 text-purple-600"/></div></CardContent></Card>
-          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">System Uptime</p><p className="text-2xl font-bold text-gray-900">{systemStats.systemUptime}</p><p className="text-xs text-green-600 flex items-center mt-1"><CheckCircle className="w-3 h-3 mr-1"/>Excellent</p></div><Monitor className="w-8 h-8 text-orange-600"/></div></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">Total Users</p><p className="text-2xl font-bold text-gray-900">{systemStats.totalUsers}</p><p className="text-xs text-green-600 flex items-center mt-1"><TrendingUp className="w-3 h-3 mr-1" />+12% this month</p></div><Users className="w-8 h-8 text-blue-600" /></div></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">Active Bookings</p><p className="text-2xl font-bold text-gray-900">{systemStats.activeBookings}</p><p className="text-xs text-blue-600 flex items-center mt-1"><Clock className="w-3 h-3 mr-1" />{systemStats.todayBookings} today</p></div><Calendar className="w-8 h-8 text-green-600" /></div></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">Total Rooms</p><p className="text-2xl font-bold text-gray-900">{systemStats.totalRooms}</p><p className="text-xs text-gray-600 flex items-center mt-1"><CheckCircle className="w-3 h-3 mr-1" />All operational</p></div><MapPin className="w-8 h-8 text-purple-600" /></div></CardContent></Card>
+          <Card><CardContent className="p-6"><div className="flex items-center justify-between"><div><p className="text-sm font-medium text-gray-600">System Uptime</p><p className="text-2xl font-bold text-gray-900">{systemStats.systemUptime}</p><p className="text-xs text-green-600 flex items-center mt-1"><CheckCircle className="w-3 h-3 mr-1" />Excellent</p></div><Monitor className="w-8 h-8 text-orange-600" /></div></CardContent></Card>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -245,7 +245,7 @@ export default function SuperAdminDashboard() {
                   <Link href="/admin/rooms"><Button className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-blue-600 hover:bg-blue-700"><MapPin className="w-6 h-6" /><span className="text-sm">Manage Rooms</span></Button></Link>
                   <Link href="/admin/users"><Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"><Users className="w-6 h-6" /><span className="text-sm">Manage Users</span></Button></Link>
                   <Link href="/admin/bookings"><Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"><Calendar className="w-6 h-6" /><span className="text-sm">View Bookings</span></Button></Link>
-                  <Link href="/admin/security"><Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"><Shield className="w-6 h-6" /><span className="text-sm">Security</span></Button></Link>
+
                 </div>
               </CardContent>
             </Card>
